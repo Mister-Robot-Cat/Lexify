@@ -1,0 +1,185 @@
+import logging
+
+from sqlalchemy import select
+from sqlalchemy.ext.asyncio import AsyncSession
+
+from app.database.models import User, UserWord, Word
+from app.services.gemini_service import WordExplanation, groq_service
+
+logger = logging.getLogger(__name__)
+
+
+class WordService:
+    """Service for managing words and user vocabularies."""
+
+    async def get_or_create_user(self, session: AsyncSession, telegram_id: int) -> User:
+        """Fetch an existing user or create a new one by telegram_id."""
+        stmt = select(User).where(User.telegram_id == telegram_id)
+        result = await session.execute(stmt)
+        user = result.scalar_one_or_none()
+
+        if user is None:
+            user = User(telegram_id=telegram_id)
+            session.add(user)
+            await session.flush()
+            logger.info("Created new user: telegram_id=%d, id=%d", telegram_id, user.id)
+
+        return user
+
+    async def find_word(self, session: AsyncSession, text: str, language: str = "Russian") -> Word | None:
+        """Look up a word in the dictionary by text and language (case-insensitive)."""
+        stmt = select(Word).where(Word.word.ilike(text.strip()), Word.language == language)
+        result = await session.execute(stmt)
+        return result.scalar_one_or_none()
+
+    async def create_word(self, session: AsyncSession, explanation: WordExplanation, language: str = "Russian") -> Word:
+        """Persist a new Word record from a Gemini explanation."""
+        word = Word(
+            word=explanation.word.lower(),
+            language=language,
+            translation=explanation.translation,
+            meaning=explanation.meaning,
+            example=explanation.example,
+            simple_explanation=explanation.simple_explanation,
+            level=explanation.level,
+            synonyms=explanation.synonyms,
+        )
+        session.add(word)
+        await session.flush()
+        logger.info("Created word: id=%d, word='%s'", word.id, word.word)
+        return word
+
+    async def link_word_to_user(
+        self, session: AsyncSession, user: User, word: Word
+    ) -> tuple[UserWord, bool]:
+        """Link a word to a user's vocabulary.
+
+        Returns:
+            Tuple of (UserWord, created) where created is True if the link is new.
+        """
+        stmt = select(UserWord).where(
+            UserWord.user_id == user.id,
+            UserWord.word_id == word.id,
+        )
+        result = await session.execute(stmt)
+        user_word = result.scalar_one_or_none()
+
+        if user_word is not None:
+            return user_word, False
+
+        user_word = UserWord(user_id=user.id, word_id=word.id)
+        session.add(user_word)
+        await session.flush()
+        logger.info("Linked word_id=%d to user_id=%d", word.id, user.id)
+        return user_word, True
+
+    async def process_word(
+        self, session: AsyncSession, telegram_id: int, text: str
+    ) -> tuple[Word, bool]:
+        """Full pipeline: get/create user, get/create word via Gemini, link them.
+
+        Args:
+            session: Active database session.
+            telegram_id: User's Telegram ID.
+            text: The word or phrase to process.
+
+        Returns:
+            Tuple of (Word, is_new) where is_new indicates if this word was
+            newly added to the user's vocabulary.
+        """
+        user = await self.get_or_create_user(session, telegram_id)
+
+        word = await self.find_word(session, text, language=user.language)
+        if word is None:
+            explanation = await groq_service.explain_word(
+                text,
+                language=user.language,
+                learning_language=user.learning_language,
+            )
+            word = await self.create_word(session, explanation, language=user.language)
+
+        _, created = await self.link_word_to_user(session, user, word)
+        return word, created
+
+    async def set_user_language(
+        self, session: AsyncSession, telegram_id: int, language: str
+    ) -> User:
+        """Update the user's preferred translation language."""
+        user = await self.get_or_create_user(session, telegram_id)
+        user.language = language
+        await session.flush()
+        logger.info("User %d set language to '%s'", telegram_id, language)
+        return user
+
+    async def get_user_language(
+        self, session: AsyncSession, telegram_id: int
+    ) -> str:
+        """Get the user's preferred translation language."""
+        user = await self.get_or_create_user(session, telegram_id)
+        return user.language
+
+    async def delete_user_word(
+        self, session: AsyncSession, telegram_id: int, word_text: str
+    ) -> bool:
+        """Remove a word from the user's vocabulary. Returns True if deleted."""
+        user = await self.get_or_create_user(session, telegram_id)
+
+        stmt = (
+            select(UserWord)
+            .join(Word)
+            .where(UserWord.user_id == user.id, Word.word.ilike(word_text.strip()))
+        )
+        result = await session.execute(stmt)
+        user_word = result.scalar_one_or_none()
+
+        if user_word is None:
+            return False
+
+        await session.delete(user_word)
+        await session.flush()
+        logger.info("Deleted word '%s' from user %d", word_text, telegram_id)
+        return True
+
+    async def set_ui_language(
+        self, session: AsyncSession, telegram_id: int, ui_lang: str
+    ) -> User:
+        """Update the user's UI language."""
+        user = await self.get_or_create_user(session, telegram_id)
+        user.ui_language = ui_lang
+        await session.flush()
+        logger.info("User %d set ui_language to '%s'", telegram_id, ui_lang)
+        return user
+
+    async def get_ui_language(
+        self, session: AsyncSession, telegram_id: int
+    ) -> str:
+        """Get the user's UI language code."""
+        user = await self.get_or_create_user(session, telegram_id)
+        return user.ui_language
+
+    async def set_learning_language(
+        self, session: AsyncSession, telegram_id: int, lang: str
+    ) -> User:
+        """Update the language the user is learning."""
+        user = await self.get_or_create_user(session, telegram_id)
+        user.learning_language = lang
+        await session.flush()
+        logger.info("User %d set learning_language to '%s'", telegram_id, lang)
+        return user
+
+    async def get_learning_language(
+        self, session: AsyncSession, telegram_id: int
+    ) -> str:
+        """Get the language the user is learning."""
+        user = await self.get_or_create_user(session, telegram_id)
+        return user.learning_language
+
+    async def get_user_word_count(self, session: AsyncSession, telegram_id: int) -> int:
+        """Return the total number of words in a user's vocabulary."""
+        user = await self.get_or_create_user(session, telegram_id)
+        stmt = select(UserWord).where(UserWord.user_id == user.id)
+        result = await session.execute(stmt)
+        return len(result.scalars().all())
+
+
+word_service = WordService()
