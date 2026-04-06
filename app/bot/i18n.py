@@ -155,6 +155,31 @@ _STRINGS: dict[str, dict[str, str]] = {
         "ru": "❌ Что-то пошло не так. Попробуй позже.",
         "tr": "❌ Bir şeyler ters gitti. Lütfen daha sonra tekrar deneyin.",
     },
+    "reverse_translation_title": {
+        "en": "Translation options for {word}",
+        "ru": "Варианты перевода для {word}",
+        "tr": "{word} için çeviriler",
+    },
+    "translations": {
+        "en": "Translations",
+        "ru": "Переводы",
+        "tr": "Çeviriler",
+    },
+    "meanings": {
+        "en": "Meanings",
+        "ru": "Значения",
+        "tr": "Anlamlar",
+    },
+    "examples": {
+        "en": "Examples",
+        "ru": "Примеры",
+        "tr": "Örnekler",
+    },
+    "context": {
+        "en": "When to use",
+        "ru": "Когда использовать",
+        "tr": "Ne zaman kullan",
+    },
 
     # Quiz
     "quiz_choose_mode": {

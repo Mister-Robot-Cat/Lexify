@@ -40,6 +40,7 @@ from app.bot.keyboards import (
 )
 from app.bot.topics import TOPIC_KEYS, TOPIC_PACKS
 from app.database.session import async_session_factory
+from app.services.gemini_service import WordExplanation, ReverseTranslation
 from app.services.quiz_service import quiz_service
 from app.services.word_service import word_service
 
@@ -292,20 +293,33 @@ async def word_handler(update: Update, context: ContextTypes.DEFAULT_TYPE) -> No
 
     try:
         async with async_session_factory() as session:
-            word, is_new = await word_service.process_word(session, user.id, text)
+            result, is_new = await word_service.process_word(session, user.id, text)
             await session.commit()
 
-        status = t("word_added") if is_new else t("word_exists")
-
-        # Notify user if the AI corrected their spelling
-        corrected = ""
-        if word.word.lower() != text.lower():
-            corrected = (
-                f"✏️ *Auto\\-corrected:* ~{_escape_md(text)}~ → *{_escape_md(word.word)}*\n\n"
+        # Handle different result types
+        if isinstance(result, ReverseTranslation):
+            # Native language input - show translation options
+            message = (
+                f"🔤 *{t('reverse_translation_title', word=_escape_md(result.word))}*\n\n"
+                f"📝 *{t('translations')}*\n{result.translations}\n\n"
+                f"📖 *{t('meanings')}*\n{result.meanings}\n\n"
+                f"💬 *{t('examples')}*\n{result.examples}\n\n"
+                f"ℹ️ *{t('context')}*\n{result.context}"
             )
+            await update.message.reply_text(message, parse_mode=ParseMode.MARKDOWN_V2)
+        else:
+            # Learning language input - normal word explanation
+            status = t("word_added") if is_new else t("word_exists")
 
-        message = f"{corrected}{_format_word(word)}\n\n{status}"
-        await update.message.reply_text(message, parse_mode=ParseMode.MARKDOWN_V2)
+            # Notify user if the AI corrected their spelling
+            corrected = ""
+            if result.word.lower() != text.lower():
+                corrected = (
+                    f"✏️ *Auto\\-corrected:* ~{_escape_md(text)}~ → *{_escape_md(result.word)}*\n\n"
+                )
+
+            message = f"{corrected}{_format_word(result)}\n\n{status}"
+            await update.message.reply_text(message, parse_mode=ParseMode.MARKDOWN_V2)
 
     except ValueError as e:
         logger.warning("Failed to process word '%s': %s", text, e)

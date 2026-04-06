@@ -1,25 +1,29 @@
 # Lexify 📖
 
-**A production-ready Telegram bot for learning English vocabulary, powered by Google Gemini AI.**
+**A multilingual Telegram bot for learning vocabulary, powered by Groq AI with themed word packs and spaced repetition.**
 
 ---
 
 ## Features
 
-- **Word Lookup** — Send any English word or phrase, get AI-generated translation, meaning, example, and explanation
-- **Personal Vocabulary** — Every word is saved to your personal dictionary
-- **Quiz Mode** — Practice with translation quizzes
-- **Spaced Repetition** — Intelligent review scheduling (correct → +2 days, wrong → +1 hour)
-- **Progress Tracking** — View your learning statistics anytime
-- **Fuzzy Answer Matching** — Minor typos are accepted during quizzes
+- **🌍 Multilingual Interface** — Bot supports 13 UI languages (English, Russian, Turkish, Spanish, French, German, Chinese, Arabic, Portuguese, Japanese, Korean, Italian, Hindi)
+- **📖 Bidirectional Translation** — Write in English OR your native language. Get AI-generated explanations and multiple translation options
+- **🎯 Choose Any Learning Language** — Learn English, Russian, Turkish, Spanish, French, German, Chinese, Arabic, Portuguese, Japanese, Korean, Italian, or Hindi
+- **📦 Themed Word Packs** — Quick-start vocabulary with curated packs: Travel, Business, IELTS, Technology, Food, Health, Entertainment, Nature
+- **🌟 Word of the Day** — Daily broadcast of interesting words to all users
+- **📚 Personal Vocabulary** — Every word is saved to your personal dictionary
+- **🎮 Quiz Modes** — Practice with 3 quiz types: Word→Translation, Translation→Word, Multiple Choice
+- **⏰ Spaced Repetition** — Intelligent review scheduling (correct → +2 days, wrong → +1 hour)
+- **📊 Progress Tracking** — View your learning statistics anytime
+- **✨ Smart Matching** — Fuzzy answer matching and auto-correction during quizzes
 
 ## Tech Stack
 
 - **Python 3.11+**
 - **FastAPI** — async web framework
-- **python-telegram-bot** — async Telegram Bot API wrapper
+- **python-telegram-bot** — async Telegram Bot API wrapper with JobQueue
 - **MySQL** + **SQLAlchemy** (async ORM)
-- **Google Gemini AI** — word explanations and translations
+- **Groq AI** — fast LLM API for word explanations and translations
 
 ## Project Structure
 
@@ -29,9 +33,12 @@ app/
 ├── config.py                # Settings from environment variables
 ├── bot/
 │   ├── handlers.py          # Telegram command & message handlers
-│   └── keyboards.py         # Inline keyboard builders
+│   ├── keyboards.py         # Inline keyboard builders
+│   ├── i18n.py              # Internationalization system
+│   ├── topics.py            # Themed word packs data
+│   └── reminders.py         # Daily jobs (Word of the Day, reminders)
 ├── services/
-│   ├── gemini_service.py    # Gemini API integration
+│   ├── gemini_service.py    # Groq API integration (renamed from gemini)
 │   ├── word_service.py      # Word CRUD and user management
 │   └── quiz_service.py      # Quiz logic and spaced repetition
 └── database/
@@ -44,7 +51,7 @@ app/
 1. **Python 3.11+** installed
 2. **MySQL** running (local or remote)
 3. **Telegram Bot Token** — create a bot via [@BotFather](https://t.me/BotFather)
-4. **Google Gemini API Key** — get one at [Google AI Studio](https://aistudio.google.com/apikey)
+4. **Groq API Key** — get one at [Groq Console](https://console.groq.com/keys)
 
 ## Quick Start
 
@@ -88,7 +95,7 @@ Edit `.env` and fill in your values:
 ```env
 TELEGRAM_BOT_TOKEN=123456:ABC-DEF...
 DATABASE_URL=mysql+aiomysql://root:password@localhost:3306/lexify
-GEMINI_API_KEY=AIza...
+GROQ_API_KEY=gsk_...
 LOG_LEVEL=INFO
 BOT_MODE=polling
 ```
@@ -117,21 +124,37 @@ Then deploy behind a reverse proxy (e.g., nginx) pointing to port 8000.
 
 ## Bot Commands
 
-| Command     | Description                      |
-|-------------|----------------------------------|
-| `/start`    | Welcome message and instructions |
-| `/quiz`     | Start a vocabulary quiz          |
-| `/progress` | View your learning statistics    |
+| Command        | Description                              |
+|----------------|------------------------------------------|
+| `/start`       | Welcome message and instructions         |
+| `/quiz`        | Start a vocabulary quiz                  |
+| `/library`     | View your word collection                |
+| `/topics`      | Browse themed word packs                 |
+| `/language`    | Choose translation language              |
+| `/learning`    | Choose what language to learn            |
+| `/ui`          | Change bot interface language             |
+| `/progress`    | View your learning statistics            |
+| `/delete <word>` | Remove a word from your library        |
+| `/cancel`      | Cancel active quiz                       |
 
-**To add a word:** simply type any English word or phrase — the bot will explain it and save it to your vocabulary.
+**How to use:**
+- **Type any word/phrase** in English → get detailed explanation and save to vocabulary
+- **Type in your native language** → get multiple translation options with examples
+- **Use `/topics`** → quickly add themed vocabulary (Travel, Business, IELTS, etc.)
+- **Practice with `/quiz`** → 3 quiz modes with spaced repetition
 
 ## Database Schema
 
 | Table        | Purpose                                    |
 |--------------|--------------------------------------------|
-| `users`      | Telegram users (identified by telegram_id) |
+| `users`      | Telegram users with language preferences    |
 | `words`      | Global word dictionary with AI explanations|
 | `user_words` | Per-user vocabulary with review stats      |
+
+**User preferences stored:**
+- `language` — Native/translation language (Russian, Turkish, etc.)
+- `ui_language` — Bot interface language (en, ru, tr, etc.) 
+- `learning_language` — Target language to learn (English, Russian, etc.)
 
 ## Environment Variables
 
@@ -139,7 +162,7 @@ Then deploy behind a reverse proxy (e.g., nginx) pointing to port 8000.
 |----------------------|----------|--------------------------------------|
 | `TELEGRAM_BOT_TOKEN` | Yes      | Telegram Bot API token               |
 | `DATABASE_URL`       | Yes      | MySQL async connection string        |
-| `GEMINI_API_KEY`     | Yes      | Google Generative AI API key         |
+| `GROQ_API_KEY`       | Yes      | Groq API key for LLM access         |
 | `LOG_LEVEL`          | No       | Logging level (default: INFO)        |
 | `BOT_MODE`           | No       | `polling` or `webhook` (default: polling) |
 | `WEBHOOK_URL`        | No       | Required when BOT_MODE=webhook       |

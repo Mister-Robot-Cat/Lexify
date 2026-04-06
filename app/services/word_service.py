@@ -4,7 +4,8 @@ from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.database.models import User, UserWord, Word
-from app.services.gemini_service import WordExplanation, groq_service
+from app.database.session import async_session_factory
+from app.services.gemini_service import WordExplanation, ReverseTranslation, groq_service
 
 logger = logging.getLogger(__name__)
 
@@ -75,31 +76,33 @@ class WordService:
 
     async def process_word(
         self, session: AsyncSession, telegram_id: int, text: str
-    ) -> tuple[Word, bool]:
-        """Full pipeline: get/create user, get/create word via Gemini, link them.
-
-        Args:
-            session: Active database session.
-            telegram_id: User's Telegram ID.
-            text: The word or phrase to process.
-
-        Returns:
-            Tuple of (Word, is_new) where is_new indicates if this word was
-            newly added to the user's vocabulary.
-        """
+    ) -> tuple[Word | ReverseTranslation, bool]:
+        """Process a word/phrase: look up existing, or fetch from AI and create."""
         user = await self.get_or_create_user(session, telegram_id)
-
-        word = await self.find_word(session, text, language=user.language)
-        if word is None:
-            explanation = await groq_service.explain_word(
+        
+        # Detect if input is in native or learning language
+        lang_type = self._detect_language(text, user.language, user.learning_language)
+        
+        if lang_type == "native":
+            # User wrote in native language - provide reverse translation options
+            reverse_result = await groq_service.reverse_translate(
                 text,
                 language=user.language,
                 learning_language=user.learning_language,
             )
-            word = await self.create_word(session, explanation, language=user.language)
-
-        _, created = await self.link_word_to_user(session, user, word)
-        return word, created
+            return reverse_result, False  # Not creating a word entry for reverse translations
+        else:
+            # User wrote in learning language - normal flow
+            word = await self.find_word(session, text, language=user.language)
+            if word is None:
+                explanation = await groq_service.explain_word(
+                    text,
+                    language=user.language,
+                    learning_language=user.learning_language,
+                )
+                word = await self.create_word(session, explanation, language=user.language)
+            _, created = await self.link_word_to_user(session, user, word)
+            return word, created
 
     async def set_user_language(
         self, session: AsyncSession, telegram_id: int, language: str
@@ -174,12 +177,31 @@ class WordService:
         user = await self.get_or_create_user(session, telegram_id)
         return user.learning_language
 
-    async def get_user_word_count(self, session: AsyncSession, telegram_id: int) -> int:
-        """Return the total number of words in a user's vocabulary."""
-        user = await self.get_or_create_user(session, telegram_id)
+    async def get_user_word_count(self, session: AsyncSession, user: User) -> int:
+        """Return total number of words in user's vocabulary."""
         stmt = select(UserWord).where(UserWord.user_id == user.id)
         result = await session.execute(stmt)
         return len(result.scalars().all())
+
+    def _detect_language(self, text: str, user_language: str, learning_language: str) -> str:
+        """Simple language detection based on characters and user preferences.
+        
+        Returns 'native' if text appears to be in user's native language,
+        'learning' if it appears to be in learning language.
+        """
+        # Simple heuristic: check for Cyrillic characters (Russian) vs Latin
+        has_cyrillic = any('\u0400' <= c <= '\u04FF' for c in text)
+        has_latin = any('a' <= c.lower() <= 'z' for c in text)
+        
+        # If text has Cyrillic and user's native is Russian, assume native language
+        if has_cyrillic and user_language == "Russian":
+            return "native"
+        # If text has only Latin and learning language is English, assume learning language
+        elif has_latin and not has_cyrillic and learning_language == "English":
+            return "learning"
+        # Default: assume learning language for mixed/unclear cases
+        else:
+            return "learning"
 
 
 word_service = WordService()
