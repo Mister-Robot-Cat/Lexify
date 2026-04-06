@@ -44,6 +44,7 @@ async def lifespan(app: FastAPI):
     # Set bot command menu visible to users
     await bot_app.bot.set_my_commands([
         BotCommand("start", "👋 Welcome & instructions"),
+        BotCommand("menu", "📋 Choose section (Words/Grammar/IELTS)"),
         BotCommand("quiz", "🎯 Practice your vocabulary"),
         BotCommand("library", "📚 View your word collection"),
         BotCommand("topics", "📦 Themed word packs"),

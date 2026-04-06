@@ -24,6 +24,7 @@ from app.bot.keyboards import (
     QUIZ_MODE,
     QUIZ_SKIP,
     QUIZ_START,
+    SECTION_SELECT,
     SET_LANG,
     SET_LEARN,
     SET_UI,
@@ -35,10 +36,12 @@ from app.bot.keyboards import (
     quiz_action_keyboard,
     quiz_choices_keyboard,
     quiz_mode_keyboard,
+    section_menu_keyboard,
     topics_keyboard,
     ui_language_keyboard,
 )
 from app.bot.topics import TOPIC_KEYS, TOPIC_PACKS
+from app.bot.user_state import Section, get_section, set_section, clear_section
 from app.database.session import async_session_factory
 from app.services.gemini_service import WordExplanation, ReverseTranslation
 from app.services.ask_service import ask_service
@@ -102,9 +105,10 @@ def _escape_md(text: str) -> str:
 # ─── /start ──────────────────────────────────────────────────────────────────
 
 async def start_handler(update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
-    """Handle the /start command — welcome the user."""
+    """Handle the /start command — welcome the user and show section menu."""
     user = update.effective_user
     logger.info("/start from user %s (id=%d)", user.username, user.id)
+    set_section(user.id, Section.WORDS)  # Default to word lookup
 
     async with async_session_factory() as session:
         db_user = await word_service.get_or_create_user(session, user.id)
@@ -117,7 +121,7 @@ async def start_handler(update: Update, context: ContextTypes.DEFAULT_TYPE) -> N
     await update.message.reply_text(
         text,
         parse_mode=ParseMode.MARKDOWN_V2,
-        reply_markup=main_menu_keyboard(),
+        reply_markup=section_menu_keyboard(),
     )
 
 
@@ -287,141 +291,62 @@ async def delete_handler(update: Update, context: ContextTypes.DEFAULT_TYPE) -> 
         await update.message.reply_text(t("delete_not_found", word=word_text), parse_mode=ParseMode.HTML)
 
 
-# ─── Word processing (default text handler) ──────────────────────────────────
+# ─── /menu — Section selector ────────────────────────────────────────────────
 
-async def word_handler(update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
-    """Handle plain text messages — treat as a word/phrase to learn or IELTS evaluation."""
+async def menu_handler(update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
+    """Handle /menu command — show section selection menu and reset state."""
     user = update.effective_user
-    text = update.message.text.strip()
+    clear_section(user.id)
+    ui_lang = await _get_ui_lang(user.id)
+    t = get_translator(ui_lang)
+    await update.message.reply_text(
+        t("menu_title"),
+        parse_mode=ParseMode.HTML,
+        reply_markup=section_menu_keyboard(),
+    )
+
+
+async def section_callback(update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
+    """Handle section selection from inline keyboard."""
+    query = update.callback_query
+    await query.answer()
+
+    try:
+        chosen = query.data.split(":")[1]
+    except (IndexError, ValueError):
+        return
+
+    user = update.effective_user
     ui_lang = await _get_ui_lang(user.id)
     t = get_translator(ui_lang)
 
-    if not text or len(text) > 500:
+    if chosen == "words":
+        set_section(user.id, Section.WORDS)
+        await query.edit_message_text(t("section_words_active"), parse_mode=ParseMode.HTML)
+    elif chosen == "grammar":
+        set_section(user.id, Section.GRAMMAR)
+        await query.edit_message_text(t("section_grammar_active"), parse_mode=ParseMode.HTML)
+    elif chosen == "ielts":
+        set_section(user.id, Section.IELTS)
+        await query.edit_message_text(t("section_ielts_active"), parse_mode=ParseMode.HTML)
+    elif chosen == "quiz":
+        set_section(user.id, Section.NONE)  # Quiz uses ConversationHandler
+        await _quiz_mode_menu(user.id, query.message.reply_text)
+    else:
+        await query.edit_message_text(t("no_section"), reply_markup=section_menu_keyboard())
+
+
+# ─── Section handlers (each processes text for its own section) ──────────────
+
+async def _handle_words_section(update: Update, text: str, t) -> None:
+    """Process text in the Word Lookup section."""
+    user = update.effective_user
+
+    if len(text) > 200:
         await update.message.reply_text(t("word_too_long"))
         return
 
-    # Check if this should be IELTS evaluation (50+ characters) or grammar question
-    if len(text) >= 50:
-        # Check if it's a question (contains question words)
-        question_indicators = ['?', 'how', 'what', 'when', 'where', 'why', 'which', 'who', 'how to', 'can', 'could', 'should', 'would']
-        is_question = any(indicator in text.lower() for indicator in question_indicators)
-        
-        if is_question:
-            # Handle as grammar/language question
-            logger.info("Grammar question from user %d: %s", user.id, text[:50])
-            await update.message.reply_text(t("ask_thinking"))
-
-            try:
-                async with async_session_factory() as session:
-                    user = await word_service.get_or_create_user(session, user.id)
-                    
-                help_response = await ask_service.ask_question(
-                    text,
-                    native_language=user.language,
-                    learning_language=user.learning_language
-                )
-                
-                message = (
-                    f"❓ *{t('ask_answer')}*\n\n"
-                    f"📝 *{t('ask_explanation')}*\n{help_response.answer}\n\n"
-                    f"💡 *{t('ask_examples')}*\n{help_response.examples}\n\n"
-                    f"🎯 *{t('ask_tips')}*\n{help_response.tips}\n\n"
-                    f"⚠️ *{t('ask_mistakes')}*\n{help_response.common_mistakes}"
-                )
-                
-                # Escape special characters for MarkdownV2
-                try:
-                    message = _escape_md(message)
-                    await update.message.reply_text(message, parse_mode=ParseMode.MARKDOWN_V2)
-                except Exception as md_error:
-                    logger.warning("Markdown formatting failed for grammar help, sending plain text: %s", md_error)
-                    # Fallback to plain text
-                    plain_message = (
-                        f"❓ Grammar Help\n\n"
-                        f"📝 Explanation:\n{help_response.answer}\n\n"
-                        f"💡 Examples:\n{help_response.examples}\n\n"
-                        f"🎯 Tips:\n{help_response.tips}\n\n"
-                        f"⚠️ Common Mistakes:\n{help_response.common_mistakes}"
-                    )
-                    await update.message.reply_text(plain_message)
-
-            except ValueError as e:
-                logger.warning("Grammar question validation error: %s", e)
-                await update.message.reply_text(t("ask_error"))
-            except Exception:
-                logger.exception("Unexpected error in grammar help")
-                await update.message.reply_text(t("ask_fatal"))
-            return
-        else:
-            # Handle as IELTS evaluation
-            logger.info("IELTS evaluation request from user %d: %d characters", user.id, len(text))
-            await update.message.reply_text(t("ielts_evaluating"))
-
-            try:
-                evaluation = await ielts_service.evaluate_writing(text)
-                
-                message = (
-                    f"📊 *{t('ielts_results')}*\n\n"
-                    f"🎯 *{t('ielts_overall_score')}*: {evaluation.overall_score}/9\n\n"
-                    f"📋 *{t('task_response')}*: {evaluation.task_response.score}/9\n"
-                    f"✅ {evaluation.task_response.strengths}\n"
-                    f"❌ {evaluation.task_response.weaknesses}\n"
-                    f"💡 {evaluation.task_response.suggestions}\n\n"
-                    f"🔗 *{t('coherence_cohesion')}*: {evaluation.coherence_cohesion.score}/9\n"
-                    f"✅ {evaluation.coherence_cohesion.strengths}\n"
-                    f"❌ {evaluation.coherence_cohesion.weaknesses}\n"
-                    f"💡 {evaluation.coherence_cohesion.suggestions}\n\n"
-                    f"📚 *{t('lexical_resource')}*: {evaluation.lexical_resource.score}/9\n"
-                    f"✅ {evaluation.lexical_resource.strengths}\n"
-                    f"❌ {evaluation.lexical_resource.weaknesses}\n"
-                    f"💡 {evaluation.lexical_resource.suggestions}\n\n"
-                    f"📝 *{t('grammatical_range')}*: {evaluation.grammatical_range.score}/9\n"
-                    f"✅ {evaluation.grammatical_range.strengths}\n"
-                    f"❌ {evaluation.grammatical_range.weaknesses}\n"
-                    f"💡 {evaluation.grammatical_range.suggestions}\n\n"
-                    f"📖 *{t('ielts_overall_feedback')}*\n{evaluation.overall_feedback}"
-                )
-                
-                # Escape special characters for MarkdownV2
-                try:
-                    message = _escape_md(message)
-                    await update.message.reply_text(message, parse_mode=ParseMode.MARKDOWN_V2)
-                except Exception as md_error:
-                    logger.warning("Markdown formatting failed, sending plain text: %s", md_error)
-                    # Fallback to plain text without formatting
-                    plain_message = (
-                        f"📊 IELTS Evaluation Results\n\n"
-                        f"🎯 Overall Band Score: {evaluation.overall_score}/9\n\n"
-                        f"📋 Task Response: {evaluation.task_response.score}/9\n"
-                        f"✅ {evaluation.task_response.strengths}\n"
-                        f"❌ {evaluation.task_response.weaknesses}\n"
-                        f"💡 {evaluation.task_response.suggestions}\n\n"
-                        f"🔗 Coherence & Cohesion: {evaluation.coherence_cohesion.score}/9\n"
-                        f"✅ {evaluation.coherence_cohesion.strengths}\n"
-                        f"❌ {evaluation.coherence_cohesion.weaknesses}\n"
-                        f"💡 {evaluation.coherence_cohesion.suggestions}\n\n"
-                        f"📚 Lexical Resource: {evaluation.lexical_resource.score}/9\n"
-                        f"✅ {evaluation.lexical_resource.strengths}\n"
-                        f"❌ {evaluation.lexical_resource.weaknesses}\n"
-                        f"💡 {evaluation.lexical_resource.suggestions}\n\n"
-                        f"📝 Grammatical Range: {evaluation.grammatical_range.score}/9\n"
-                        f"✅ {evaluation.grammatical_range.strengths}\n"
-                        f"❌ {evaluation.grammatical_range.weaknesses}\n"
-                        f"💡 {evaluation.grammatical_range.suggestions}\n\n"
-                        f"📖 Overall Feedback:\n{evaluation.overall_feedback}"
-                    )
-                    await update.message.reply_text(plain_message)
-
-            except ValueError as e:
-                logger.warning("IELTS evaluation validation error: %s", e)
-                await update.message.reply_text(t("ielts_error"))
-            except Exception:
-                logger.exception("Unexpected error in IELTS evaluation")
-                await update.message.reply_text(t("ielts_fatal"))
-            return
-
-    # Regular word/phrase processing (under 50 characters)
-    logger.info("Word request from user %d: '%s'", user.id, text)
+    logger.info("[WORDS] user %d: '%s'", user.id, text)
     await update.message.reply_text(t("word_looking_up"))
 
     try:
@@ -429,9 +354,7 @@ async def word_handler(update: Update, context: ContextTypes.DEFAULT_TYPE) -> No
             result, is_new = await word_service.process_word(session, user.id, text)
             await session.commit()
 
-        # Handle different result types
         if isinstance(result, ReverseTranslation):
-            # Native language input - show translation options
             message = (
                 f"🔤 *{t('reverse_translation_title', word=_escape_md(result.word))}*\n\n"
                 f"📝 *{t('translations')}*\n{_escape_md(result.translations)}\n\n"
@@ -442,42 +365,35 @@ async def word_handler(update: Update, context: ContextTypes.DEFAULT_TYPE) -> No
             try:
                 await update.message.reply_text(message, parse_mode=ParseMode.MARKDOWN_V2)
             except Exception as md_error:
-                logger.warning("Markdown formatting failed for reverse translation, sending plain text: %s", md_error)
-                # Fallback to plain text
-                plain_message = (
+                logger.warning("Markdown failed for reverse translation: %s", md_error)
+                plain = (
                     f"🔤 Translation options for {result.word}\n\n"
                     f"📝 Translations:\n{result.translations}\n\n"
                     f"📖 Meanings:\n{result.meanings}\n\n"
                     f"💬 Examples:\n{result.examples}\n\n"
                     f"ℹ️ When to use:\n{result.context}"
                 )
-                await update.message.reply_text(plain_message)
+                await update.message.reply_text(plain)
         else:
-            # Learning language input - normal word explanation
             status = t("word_added") if is_new else t("word_exists")
-
-            # Notify user if the AI corrected their spelling
             corrected = ""
             if result.word.lower() != text.lower():
-                corrected = (
-                    f"✏️ *Auto\\-corrected:* ~{_escape_md(text)}~ → *{_escape_md(result.word)}*\n\n"
-                )
+                corrected = f"✏️ *Auto\\-corrected:* ~{_escape_md(text)}~ → *{_escape_md(result.word)}*\n\n"
 
             message = f"{corrected}{_format_word(result)}\n\n{status}"
             try:
                 await update.message.reply_text(message, parse_mode=ParseMode.MARKDOWN_V2)
             except Exception as md_error:
-                logger.warning("Markdown formatting failed for word, sending plain text: %s", md_error)
-                # Fallback to plain text
-                plain_message = (
-                    f"{corrected}📖 {result.word}  [{result.level}]\n\n"
+                logger.warning("Markdown failed for word: %s", md_error)
+                plain = (
+                    f"📖 {result.word}  [{result.level}]\n\n"
                     f"🌐 Translation:\n    {result.translation}\n\n"
                     f"📝 Meaning:\n    {result.meaning}\n\n"
                     f"💬 Example: {result.example}\n\n"
                     f"🧩 Simple explanation: {result.simple_explanation}\n\n"
                     f"{status}"
                 )
-                await update.message.reply_text(plain_message)
+                await update.message.reply_text(plain)
 
     except ValueError as e:
         logger.warning("Failed to process word '%s': %s", text, e)
@@ -485,6 +401,155 @@ async def word_handler(update: Update, context: ContextTypes.DEFAULT_TYPE) -> No
     except Exception:
         logger.exception("Unexpected error processing word '%s'", text)
         await update.message.reply_text(t("word_fatal"))
+
+
+async def _handle_grammar_section(update: Update, text: str, t) -> None:
+    """Process text in the Grammar Q&A section."""
+    user = update.effective_user
+    logger.info("[GRAMMAR] user %d: %s", user.id, text[:50])
+    await update.message.reply_text(t("ask_thinking"))
+
+    try:
+        async with async_session_factory() as session:
+            db_user = await word_service.get_or_create_user(session, user.id)
+            native_lang = db_user.language
+            learning_lang = db_user.learning_language
+
+        help_response = await ask_service.ask_question(
+            text,
+            native_language=native_lang,
+            learning_language=learning_lang,
+        )
+
+        message = (
+            f"❓ *{t('ask_answer')}*\n\n"
+            f"📝 *{t('ask_explanation')}*\n{help_response.answer}\n\n"
+            f"💡 *{t('ask_examples')}*\n{help_response.examples}\n\n"
+            f"🎯 *{t('ask_tips')}*\n{help_response.tips}\n\n"
+            f"⚠️ *{t('ask_mistakes')}*\n{help_response.common_mistakes}"
+        )
+
+        try:
+            message = _escape_md(message)
+            await update.message.reply_text(message, parse_mode=ParseMode.MARKDOWN_V2)
+        except Exception as md_error:
+            logger.warning("Markdown failed for grammar help: %s", md_error)
+            plain = (
+                f"❓ Grammar Help\n\n"
+                f"📝 Explanation:\n{help_response.answer}\n\n"
+                f"💡 Examples:\n{help_response.examples}\n\n"
+                f"🎯 Tips:\n{help_response.tips}\n\n"
+                f"⚠️ Common Mistakes:\n{help_response.common_mistakes}"
+            )
+            await update.message.reply_text(plain)
+
+    except ValueError as e:
+        logger.warning("Grammar question error: %s", e)
+        await update.message.reply_text(t("ask_error"))
+    except Exception:
+        logger.exception("Unexpected error in grammar help")
+        await update.message.reply_text(t("ask_fatal"))
+
+
+async def _handle_ielts_section(update: Update, text: str, t) -> None:
+    """Process text in the IELTS Writing section."""
+    user = update.effective_user
+
+    if len(text) < 50:
+        await update.message.reply_text(t("ielts_text_too_short"))
+        return
+
+    logger.info("[IELTS] user %d: %d characters", user.id, len(text))
+    await update.message.reply_text(t("ielts_evaluating"))
+
+    try:
+        evaluation = await ielts_service.evaluate_writing(text)
+
+        message = (
+            f"📊 *{t('ielts_results')}*\n\n"
+            f"🎯 *{t('ielts_overall_score')}*: {evaluation.overall_score}/9\n\n"
+            f"📋 *{t('task_response')}*: {evaluation.task_response.score}/9\n"
+            f"✅ {evaluation.task_response.strengths}\n"
+            f"❌ {evaluation.task_response.weaknesses}\n"
+            f"💡 {evaluation.task_response.suggestions}\n\n"
+            f"🔗 *{t('coherence_cohesion')}*: {evaluation.coherence_cohesion.score}/9\n"
+            f"✅ {evaluation.coherence_cohesion.strengths}\n"
+            f"❌ {evaluation.coherence_cohesion.weaknesses}\n"
+            f"💡 {evaluation.coherence_cohesion.suggestions}\n\n"
+            f"📚 *{t('lexical_resource')}*: {evaluation.lexical_resource.score}/9\n"
+            f"✅ {evaluation.lexical_resource.strengths}\n"
+            f"❌ {evaluation.lexical_resource.weaknesses}\n"
+            f"💡 {evaluation.lexical_resource.suggestions}\n\n"
+            f"📝 *{t('grammatical_range')}*: {evaluation.grammatical_range.score}/9\n"
+            f"✅ {evaluation.grammatical_range.strengths}\n"
+            f"❌ {evaluation.grammatical_range.weaknesses}\n"
+            f"💡 {evaluation.grammatical_range.suggestions}\n\n"
+            f"📖 *{t('ielts_overall_feedback')}*\n{evaluation.overall_feedback}"
+        )
+
+        try:
+            message = _escape_md(message)
+            await update.message.reply_text(message, parse_mode=ParseMode.MARKDOWN_V2)
+        except Exception as md_error:
+            logger.warning("Markdown failed for IELTS: %s", md_error)
+            plain = (
+                f"📊 IELTS Evaluation Results\n\n"
+                f"🎯 Overall Band Score: {evaluation.overall_score}/9\n\n"
+                f"📋 Task Response: {evaluation.task_response.score}/9\n"
+                f"✅ {evaluation.task_response.strengths}\n"
+                f"❌ {evaluation.task_response.weaknesses}\n"
+                f"💡 {evaluation.task_response.suggestions}\n\n"
+                f"🔗 Coherence & Cohesion: {evaluation.coherence_cohesion.score}/9\n"
+                f"✅ {evaluation.coherence_cohesion.strengths}\n"
+                f"❌ {evaluation.coherence_cohesion.weaknesses}\n"
+                f"💡 {evaluation.coherence_cohesion.suggestions}\n\n"
+                f"📚 Lexical Resource: {evaluation.lexical_resource.score}/9\n"
+                f"✅ {evaluation.lexical_resource.strengths}\n"
+                f"❌ {evaluation.lexical_resource.weaknesses}\n"
+                f"💡 {evaluation.lexical_resource.suggestions}\n\n"
+                f"📝 Grammatical Range: {evaluation.grammatical_range.score}/9\n"
+                f"✅ {evaluation.grammatical_range.strengths}\n"
+                f"❌ {evaluation.grammatical_range.weaknesses}\n"
+                f"💡 {evaluation.grammatical_range.suggestions}\n\n"
+                f"📖 Overall Feedback:\n{evaluation.overall_feedback}"
+            )
+            await update.message.reply_text(plain)
+
+    except ValueError as e:
+        logger.warning("IELTS evaluation error: %s", e)
+        await update.message.reply_text(t("ielts_error"))
+    except Exception:
+        logger.exception("Unexpected error in IELTS evaluation")
+        await update.message.reply_text(t("ielts_fatal"))
+
+
+# ─── Text router (routes messages based on user's current section) ───────────
+
+async def text_router(update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
+    """Route plain text messages to the correct section handler based on user state."""
+    user = update.effective_user
+    text = update.message.text.strip()
+    ui_lang = await _get_ui_lang(user.id)
+    t = get_translator(ui_lang)
+
+    if not text or len(text) > 2000:
+        await update.message.reply_text(t("word_too_long"))
+        return
+
+    section = get_section(user.id)
+
+    if section == Section.WORDS:
+        await _handle_words_section(update, text, t)
+    elif section == Section.GRAMMAR:
+        await _handle_grammar_section(update, text, t)
+    elif section == Section.IELTS:
+        await _handle_ielts_section(update, text, t)
+    else:
+        # No section selected — prompt user to choose
+        await update.message.reply_text(
+            t("no_section"),
+            reply_markup=section_menu_keyboard(),
+        )
 
 
 # ─── Quiz flow (ConversationHandler) ─────────────────────────────────────────
@@ -898,31 +963,21 @@ async def topics_callback(update: Update, context: ContextTypes.DEFAULT_TYPE) ->
 
 
 async def ask_handler(update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
-    """Handle grammar/language questions command."""
+    """Handle /ask command — switch to Grammar Q&A section."""
     user = update.effective_user
+    set_section(user.id, Section.GRAMMAR)
     ui_lang = await _get_ui_lang(user.id)
     t = get_translator(ui_lang)
-
-    message = (
-        f"❓ *{t('ask_title')}*\n\n"
-        f"{t('ask_instructions')}\n\n"
-        f"{t('ask_send_question')}"
-    )
-    await update.message.reply_text(message, parse_mode=ParseMode.MARKDOWN_V2)
+    await update.message.reply_text(t("section_grammar_active"), parse_mode=ParseMode.HTML)
 
 
 async def ielts_handler(update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
-    """Handle IELTS writing evaluation command."""
+    """Handle /ielts command — switch to IELTS Writing section."""
     user = update.effective_user
+    set_section(user.id, Section.IELTS)
     ui_lang = await _get_ui_lang(user.id)
     t = get_translator(ui_lang)
-
-    message = (
-        f"📝 *{t('ielts_title')}*\n\n"
-        f"{t('ielts_instructions')}\n\n"
-        f"{t('ielts_send_text')}"
-    )
-    await update.message.reply_text(message, parse_mode=ParseMode.MARKDOWN_V2)
+    await update.message.reply_text(t("section_ielts_active"), parse_mode=ParseMode.HTML)
 
 
 
@@ -957,6 +1012,7 @@ def register_handlers(application: Application) -> None:
 
     # Commands
     application.add_handler(CommandHandler("start", start_handler))
+    application.add_handler(CommandHandler("menu", menu_handler))
     application.add_handler(CommandHandler("quiz", quiz_command_handler))
     application.add_handler(CommandHandler("progress", progress_handler))
     application.add_handler(CommandHandler("library", library_handler))
@@ -968,11 +1024,11 @@ def register_handlers(application: Application) -> None:
     application.add_handler(CommandHandler("ask", ask_handler))
     application.add_handler(CommandHandler("ielts", ielts_handler))
 
-    # Message handlers (order matters!)
-    # Word handler should come first - it will delegate to IELTS if needed
-    application.add_handler(MessageHandler(filters.TEXT & ~filters.COMMAND, word_handler))
+    # Text router — routes messages to correct section based on user state
+    application.add_handler(MessageHandler(filters.TEXT & ~filters.COMMAND, text_router))
 
     # Callback handlers
+    application.add_handler(CallbackQueryHandler(section_callback, pattern=f"^{SECTION_SELECT}:"))
     application.add_handler(CallbackQueryHandler(language_callback, pattern=f"^{SET_LANG}:"))
     application.add_handler(CallbackQueryHandler(ui_callback, pattern=f"^{SET_UI}:"))
     application.add_handler(CallbackQueryHandler(learning_callback, pattern=f"^{SET_LEARN}:"))

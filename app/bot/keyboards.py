@@ -10,6 +10,7 @@ SET_LANG = "set_lang"
 SET_UI = "set_ui"
 SET_LEARN = "set_learn"
 TOPIC_SELECT = "topic"
+SECTION_SELECT = "section"
 
 # Quiz modes
 MODE_CLASSIC = "classic"        # EN word → type translation
@@ -170,3 +171,17 @@ def library_pagination_keyboard(page: int, total_pages: int) -> InlineKeyboardMa
         )
 
     return InlineKeyboardMarkup([buttons])
+
+
+def section_menu_keyboard() -> InlineKeyboardMarkup:
+    """Inline keyboard for choosing a bot section."""
+    return InlineKeyboardMarkup([
+        [
+            InlineKeyboardButton("📖 Word Lookup", callback_data=f"{SECTION_SELECT}:words"),
+            InlineKeyboardButton("❓ Grammar Q&A", callback_data=f"{SECTION_SELECT}:grammar"),
+        ],
+        [
+            InlineKeyboardButton("📝 IELTS Writing", callback_data=f"{SECTION_SELECT}:ielts"),
+            InlineKeyboardButton("🎯 Quiz", callback_data=f"{SECTION_SELECT}:quiz"),
+        ],
+    ])

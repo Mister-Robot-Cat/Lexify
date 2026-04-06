@@ -371,6 +371,32 @@ _STRINGS: dict[str, dict[str, str]] = {
         "ru": "Когда использовать",
         "az": "Necə istifadə etmək",
     },
+    # Section / Menu
+    "menu_title": {
+        "en": "📋 <b>Choose a section</b>\n\nSelect what you want to do:",
+        "ru": "📋 <b>Выбери раздел</b>\n\nВыбери, что хочешь сделать:",
+        "az": "📋 <b>Bölmə seç</b>\n\nNə etmək istədiyini seç:",
+    },
+    "section_words_active": {
+        "en": "📖 <b>Word Lookup</b> mode active.\n\nSend me any word or phrase — I'll explain and save it.\nType /menu to switch sections.",
+        "ru": "📖 Режим <b>Поиска слов</b> активен.\n\nОтправь мне слово или фразу — я объясню и сохраню.\nНабери /menu для смены раздела.",
+        "az": "📖 <b>Söz Axtarışı</b> rejimi aktivdir.\n\nMənə söz və ya ifadə göndər — izah edərəm və saxlayacağam.\nBölmə dəyişmək üçün /menu yaz.",
+    },
+    "section_grammar_active": {
+        "en": "❓ <b>Grammar Q&A</b> mode active.\n\nAsk me anything about grammar, vocabulary, or language learning!\nType /menu to switch sections.",
+        "ru": "❓ Режим <b>Вопросов по грамматике</b> активен.\n\nСпрашивай о грамматике, лексике или изучении языка!\nНабери /menu для смены раздела.",
+        "az": "❓ <b>Qrammatika Sual-Cavab</b> rejimi aktivdir.\n\nQrammatika, lüğət və ya dil öyrənmə haqqında soruş!\nBölmə dəyişmək üçün /menu yaz.",
+    },
+    "section_ielts_active": {
+        "en": "📝 <b>IELTS Writing</b> mode active.\n\nSend me your essay or text — I'll evaluate it by IELTS criteria.\nType /menu to switch sections.",
+        "ru": "📝 Режим <b>IELTS Writing</b> активен.\n\nОтправь мне эссе или текст — я оценю по критериям IELTS.\nНабери /menu для смены раздела.",
+        "az": "📝 <b>IELTS Writing</b> rejimi aktivdir.\n\nMənə esse və ya mətn göndər — IELTS meyarlarına görə qiymətləndirəcəm.\nBölmə dəyişmək üçün /menu yaz.",
+    },
+    "no_section": {
+        "en": "🤔 Please choose a section first! Use /menu or tap a button below.",
+        "ru": "🤔 Сначала выбери раздел! Набери /menu или нажми кнопку ниже.",
+        "az": "🤔 Əvvəlcə bölmə seç! /menu yaz və ya aşağıdakı düyməyə toxun.",
+    },
 }
 
 
