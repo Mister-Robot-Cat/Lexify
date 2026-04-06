@@ -406,7 +406,7 @@ async def _handle_words_section(update: Update, text: str, t) -> None:
 async def _handle_grammar_section(update: Update, text: str, t) -> None:
     """Process text in the Grammar Q&A section."""
     user = update.effective_user
-    logger.info("[GRAMMAR] user %d: %s", user.id, text[:50])
+    logger.info("[GRAMMAR] user %d: %s", user.id, text[:80])
     await update.message.reply_text(t("ask_thinking"))
 
     try:
@@ -421,27 +421,8 @@ async def _handle_grammar_section(update: Update, text: str, t) -> None:
             learning_language=learning_lang,
         )
 
-        message = (
-            f"❓ *{t('ask_answer')}*\n\n"
-            f"📝 *{t('ask_explanation')}*\n{help_response.answer}\n\n"
-            f"💡 *{t('ask_examples')}*\n{help_response.examples}\n\n"
-            f"🎯 *{t('ask_tips')}*\n{help_response.tips}\n\n"
-            f"⚠️ *{t('ask_mistakes')}*\n{help_response.common_mistakes}"
-        )
-
-        try:
-            message = _escape_md(message)
-            await update.message.reply_text(message, parse_mode=ParseMode.MARKDOWN_V2)
-        except Exception as md_error:
-            logger.warning("Markdown failed for grammar help: %s", md_error)
-            plain = (
-                f"❓ Grammar Help\n\n"
-                f"📝 Explanation:\n{help_response.answer}\n\n"
-                f"💡 Examples:\n{help_response.examples}\n\n"
-                f"🎯 Tips:\n{help_response.tips}\n\n"
-                f"⚠️ Common Mistakes:\n{help_response.common_mistakes}"
-            )
-            await update.message.reply_text(plain)
+        # Send as plain text — the AI already formats it nicely in the user's language
+        await update.message.reply_text(help_response.answer)
 
     except ValueError as e:
         logger.warning("Grammar question error: %s", e)
