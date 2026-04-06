@@ -66,33 +66,23 @@ async def _get_ui_lang(telegram_id: int) -> str:
         return await word_service.get_ui_language(session, telegram_id)
 
 
-def _format_word(word) -> str:
-    """Format a Word model into a Telegram-friendly message."""
-    translation = _escape_md(word.translation).replace("\n", "\n    ")
-    meaning = _escape_md(word.meaning).replace("\n", "\n    ")
+def _h(text: str) -> str:
+    """Escape HTML special characters for Telegram HTML parse mode."""
+    return text.replace("&", "&amp;").replace("<", "&lt;").replace(">", "&gt;")
 
+
+def _format_word_html(word) -> str:
+    """Format a Word model into a Telegram HTML message."""
     parts = [
-        f"📖 *{_escape_md(word.word)}*  \\[{_escape_md(word.level)}\\]\n",
-        f"🌐 *Translation:*\n    {translation}",
-        f"📝 *Meaning:*\n    {meaning}",
-        f"💬 *Example:* _{_escape_md(word.example)}_",
-        f"💡 *Simple Explanation:* {_escape_md(word.simple_explanation)}",
+        f"📖 <b>{_h(word.word)}</b>  [{_h(word.level)}]\n",
+        f"🌐 <b>Translation:</b>\n    {_h(word.translation)}",
+        f"📝 <b>Meaning:</b>\n    {_h(word.meaning)}",
+        f"💬 <b>Example:</b> <i>{_h(word.example)}</i>",
+        f"💡 <b>Simple Explanation:</b> {_h(word.simple_explanation)}",
     ]
     if word.synonyms:
-        parts.append(f"🔗 *Synonyms:* {_escape_md(word.synonyms)}")
+        parts.append(f"🔗 <b>Synonyms:</b> {_h(word.synonyms)}")
     return "\n".join(parts)
-
-
-def _escape_md(text: str) -> str:
-    """Escape special characters for Telegram MarkdownV2."""
-    special_chars = r"_*[]()~`>#+-=|{}.!"
-    escaped = ""
-    for char in text:
-        if char in special_chars:
-            escaped += f"\\{char}"
-        else:
-            escaped += char
-    return escaped
 
 
 # ─── /start ──────────────────────────────────────────────────────────────────
@@ -109,11 +99,11 @@ async def start_handler(update: Update, context: ContextTypes.DEFAULT_TYPE) -> N
         await session.commit()
 
     t = get_translator(ui_lang)
-    name = _escape_md(user.first_name)
+    name = _h(user.first_name)
     text = t("welcome", name=name)
     await update.message.reply_text(
         text,
-        parse_mode=ParseMode.MARKDOWN_V2,
+        parse_mode=ParseMode.HTML,
         reply_markup=section_menu_keyboard(),
     )
 
@@ -349,44 +339,21 @@ async def _handle_words_section(update: Update, text: str, t) -> None:
 
         if isinstance(result, ReverseTranslation):
             message = (
-                f"🔤 *{t('reverse_translation_title', word=_escape_md(result.word))}*\n\n"
-                f"📝 *{t('translations')}*\n{_escape_md(result.translations)}\n\n"
-                f"📖 *{t('meanings')}*\n{_escape_md(result.meanings)}\n\n"
-                f"💬 *{t('examples')}*\n{_escape_md(result.examples)}\n\n"
-                f"ℹ️ *{t('context')}*\n{_escape_md(result.context)}"
+                f"🔤 <b>{t('reverse_translation_title', word=_h(result.word))}</b>\n\n"
+                f"📝 <b>{t('translations')}</b>\n{_h(result.translations)}\n\n"
+                f"📖 <b>{t('meanings')}</b>\n{_h(result.meanings)}\n\n"
+                f"💬 <b>{t('examples')}</b>\n{_h(result.examples)}\n\n"
+                f"ℹ️ <b>{t('context')}</b>\n{_h(result.context)}"
             )
-            try:
-                await update.message.reply_text(message, parse_mode=ParseMode.MARKDOWN_V2)
-            except Exception as md_error:
-                logger.warning("Markdown failed for reverse translation: %s", md_error)
-                plain = (
-                    f"🔤 Translation options for {result.word}\n\n"
-                    f"📝 Translations:\n{result.translations}\n\n"
-                    f"📖 Meanings:\n{result.meanings}\n\n"
-                    f"💬 Examples:\n{result.examples}\n\n"
-                    f"ℹ️ When to use:\n{result.context}"
-                )
-                await update.message.reply_text(plain)
+            await update.message.reply_text(message, parse_mode=ParseMode.HTML)
         else:
             status = t("word_added") if is_new else t("word_exists")
             corrected = ""
             if result.word.lower() != text.lower():
-                corrected = f"✏️ *Auto\\-corrected:* ~{_escape_md(text)}~ → *{_escape_md(result.word)}*\n\n"
+                corrected = f"✏️ <b>Auto-corrected:</b> <s>{_h(text)}</s> → <b>{_h(result.word)}</b>\n\n"
 
-            message = f"{corrected}{_format_word(result)}\n\n{status}"
-            try:
-                await update.message.reply_text(message, parse_mode=ParseMode.MARKDOWN_V2)
-            except Exception as md_error:
-                logger.warning("Markdown failed for word: %s", md_error)
-                plain = (
-                    f"📖 {result.word}  [{result.level}]\n\n"
-                    f"🌐 Translation:\n    {result.translation}\n\n"
-                    f"📝 Meaning:\n    {result.meaning}\n\n"
-                    f"💬 Example: {result.example}\n\n"
-                    f"🧩 Simple explanation: {result.simple_explanation}\n\n"
-                    f"{status}"
-                )
-                await update.message.reply_text(plain)
+            message = f"{corrected}{_format_word_html(result)}\n\n{status}"
+            await update.message.reply_text(message, parse_mode=ParseMode.HTML)
 
     except ValueError as e:
         logger.warning("Failed to process word '%s': %s", text, e)
@@ -447,55 +414,24 @@ async def _handle_ielts_section(update: Update, text: str, t) -> None:
     try:
         evaluation = await ielts_service.evaluate_writing(text)
 
-        message = (
-            f"📊 *{t('ielts_results')}*\n\n"
-            f"🎯 *{t('ielts_overall_score')}*: {evaluation.overall_score}/9\n\n"
-            f"📋 *{t('task_response')}*: {evaluation.task_response.score}/9\n"
-            f"✅ {evaluation.task_response.strengths}\n"
-            f"❌ {evaluation.task_response.weaknesses}\n"
-            f"💡 {evaluation.task_response.suggestions}\n\n"
-            f"🔗 *{t('coherence_cohesion')}*: {evaluation.coherence_cohesion.score}/9\n"
-            f"✅ {evaluation.coherence_cohesion.strengths}\n"
-            f"❌ {evaluation.coherence_cohesion.weaknesses}\n"
-            f"💡 {evaluation.coherence_cohesion.suggestions}\n\n"
-            f"📚 *{t('lexical_resource')}*: {evaluation.lexical_resource.score}/9\n"
-            f"✅ {evaluation.lexical_resource.strengths}\n"
-            f"❌ {evaluation.lexical_resource.weaknesses}\n"
-            f"💡 {evaluation.lexical_resource.suggestions}\n\n"
-            f"📝 *{t('grammatical_range')}*: {evaluation.grammatical_range.score}/9\n"
-            f"✅ {evaluation.grammatical_range.strengths}\n"
-            f"❌ {evaluation.grammatical_range.weaknesses}\n"
-            f"💡 {evaluation.grammatical_range.suggestions}\n\n"
-            f"📖 *{t('ielts_overall_feedback')}*\n{evaluation.overall_feedback}"
-        )
-
-        try:
-            message = _escape_md(message)
-            await update.message.reply_text(message, parse_mode=ParseMode.MARKDOWN_V2)
-        except Exception as md_error:
-            logger.warning("Markdown failed for IELTS: %s", md_error)
-            plain = (
-                f"📊 IELTS Evaluation Results\n\n"
-                f"🎯 Overall Band Score: {evaluation.overall_score}/9\n\n"
-                f"📋 Task Response: {evaluation.task_response.score}/9\n"
-                f"✅ {evaluation.task_response.strengths}\n"
-                f"❌ {evaluation.task_response.weaknesses}\n"
-                f"💡 {evaluation.task_response.suggestions}\n\n"
-                f"🔗 Coherence & Cohesion: {evaluation.coherence_cohesion.score}/9\n"
-                f"✅ {evaluation.coherence_cohesion.strengths}\n"
-                f"❌ {evaluation.coherence_cohesion.weaknesses}\n"
-                f"💡 {evaluation.coherence_cohesion.suggestions}\n\n"
-                f"📚 Lexical Resource: {evaluation.lexical_resource.score}/9\n"
-                f"✅ {evaluation.lexical_resource.strengths}\n"
-                f"❌ {evaluation.lexical_resource.weaknesses}\n"
-                f"💡 {evaluation.lexical_resource.suggestions}\n\n"
-                f"📝 Grammatical Range: {evaluation.grammatical_range.score}/9\n"
-                f"✅ {evaluation.grammatical_range.strengths}\n"
-                f"❌ {evaluation.grammatical_range.weaknesses}\n"
-                f"💡 {evaluation.grammatical_range.suggestions}\n\n"
-                f"📖 Overall Feedback:\n{evaluation.overall_feedback}"
+        def _crit(emoji, name, crit):
+            return (
+                f"{emoji} <b>{name}</b>: {crit.score}/9\n"
+                f"  ✅ {_h(crit.strengths)}\n"
+                f"  ❌ {_h(crit.weaknesses)}\n"
+                f"  💡 {_h(crit.suggestions)}"
             )
-            await update.message.reply_text(plain)
+
+        message = (
+            f"📊 <b>{t('ielts_results')}</b>\n\n"
+            f"🎯 <b>{t('ielts_overall_score')}</b>: {evaluation.overall_score}/9\n\n"
+            f"{_crit('📋', t('task_response'), evaluation.task_response)}\n\n"
+            f"{_crit('🔗', t('coherence_cohesion'), evaluation.coherence_cohesion)}\n\n"
+            f"{_crit('📚', t('lexical_resource'), evaluation.lexical_resource)}\n\n"
+            f"{_crit('📝', t('grammatical_range'), evaluation.grammatical_range)}\n\n"
+            f"� <b>{t('ielts_overall_feedback')}</b>\n{_h(evaluation.overall_feedback)}"
+        )
+        await update.message.reply_text(message, parse_mode=ParseMode.HTML)
 
     except ValueError as e:
         logger.warning("IELTS evaluation error: %s", e)
@@ -545,7 +481,7 @@ async def _quiz_mode_menu(user_id: int, reply_func) -> int:
     t = get_translator(ui_lang)
     await reply_func(
         t("quiz_choose_mode"),
-        parse_mode=ParseMode.MARKDOWN_V2,
+        parse_mode=ParseMode.HTML,
         reply_markup=quiz_mode_keyboard(
             label_classic=t("btn_classic"),
             label_reverse=t("btn_reverse"),
@@ -601,8 +537,8 @@ async def quiz_skip_handler(update: Update, context: ContextTypes.DEFAULT_TYPE) 
         else:
             answer = word_data["translation"]
         await query.edit_message_text(
-            t("quiz_skipped", answer=_escape_md(answer)),
-            parse_mode=ParseMode.MARKDOWN_V2,
+            t("quiz_skipped", answer=_h(answer)),
+            parse_mode=ParseMode.HTML,
         )
 
     return await _send_quiz_question(update, context)
@@ -637,18 +573,18 @@ async def quiz_choice_handler(update: Update, context: ContextTypes.DEFAULT_TYPE
     if is_correct:
         text = (
             f"{t('quiz_correct')}\n\n"
-            f"📖 *{_escape_md(word_data['word'])}* — {_escape_md(word_data['translation'])}\n"
+            f"📖 <b>{_h(word_data['word'])}</b> — {_h(word_data['translation'])}\n"
             f"{t('quiz_streak', count=str(user_word.correct_count))}"
         )
     else:
         text = (
             f"{t('quiz_wrong')}\n\n"
-            f"{t('quiz_correct_answer', answer=_escape_md(word_data['translation']))}\n\n"
-            f"📖 *{_escape_md(word_data['word'])}*\n"
-            f"💡 {_escape_md(word_data['simple_explanation'])}"
+            f"{t('quiz_correct_answer', answer=_h(word_data['translation']))}\n\n"
+            f"📖 <b>{_h(word_data['word'])}</b>\n"
+            f"💡 {_h(word_data['simple_explanation'])}"
         )
 
-    await query.edit_message_text(text, parse_mode=ParseMode.MARKDOWN_V2)
+    await query.edit_message_text(text, parse_mode=ParseMode.HTML)
     return await _send_quiz_question(update, context)
 
 
@@ -683,19 +619,19 @@ async def quiz_answer_handler(update: Update, context: ContextTypes.DEFAULT_TYPE
     if is_correct:
         text = (
             f"{t('quiz_correct')}\n\n"
-            f"📖 *{_escape_md(word_data['word'])}* — {_escape_md(word_data['translation'])}\n"
+            f"📖 <b>{_h(word_data['word'])}</b> — {_h(word_data['translation'])}\n"
             f"{t('quiz_streak', count=str(user_word.correct_count))}"
         )
     else:
         text = (
             f"{t('quiz_wrong')}\n\n"
-            f"{t('quiz_your_answer', answer=_escape_md(user_answer))}\n"
-            f"{t('quiz_correct_answer', answer=_escape_md(correct_answer))}\n\n"
-            f"📖 *{_escape_md(word_data['word'])}*\n"
-            f"💡 {_escape_md(word_data['simple_explanation'])}"
+            f"{t('quiz_your_answer', answer=_h(user_answer))}\n"
+            f"{t('quiz_correct_answer', answer=_h(correct_answer))}\n\n"
+            f"📖 <b>{_h(word_data['word'])}</b>\n"
+            f"💡 {_h(word_data['simple_explanation'])}"
         )
 
-    await update.message.reply_text(text, parse_mode=ParseMode.MARKDOWN_V2)
+    await update.message.reply_text(text, parse_mode=ParseMode.HTML)
     return await _send_quiz_question(update, context)
 
 
@@ -723,7 +659,7 @@ async def _send_quiz_question(update: Update, context: ContextTypes.DEFAULT_TYPE
         if word is None:
             await session.commit()
             msg = t("quiz_finished") if asked else t("quiz_no_words")
-            await reply_func(msg, parse_mode=ParseMode.MARKDOWN_V2)
+            await reply_func(msg)
             context.user_data.pop("quiz_word", None)
             context.user_data.pop("quiz_asked", None)
             context.user_data.pop("quiz_mode", None)
@@ -749,7 +685,7 @@ async def _send_quiz_question(update: Update, context: ContextTypes.DEFAULT_TYPE
 
         # Build question based on mode
         if mode == MODE_REVERSE:
-            text = t("quiz_reverse_q", translation=_escape_md(short_translation))
+            text = t("quiz_reverse_q", translation=_h(short_translation))
             keyboard = quiz_action_keyboard()
 
         elif mode == MODE_CHOICES:
@@ -762,11 +698,11 @@ async def _send_quiz_question(update: Update, context: ContextTypes.DEFAULT_TYPE
             correct_index = options.index(short_translation)
             quiz_data["correct_index"] = correct_index
 
-            text = t("quiz_choices_q", word=_escape_md(word.word))
+            text = t("quiz_choices_q", word=_h(word.word))
             keyboard = quiz_choices_keyboard(options, correct_index)
 
         else:  # MODE_CLASSIC
-            text = t("quiz_classic_q", word=_escape_md(word.word))
+            text = t("quiz_classic_q", word=_h(word.word))
             keyboard = quiz_action_keyboard()
 
         await session.commit()
@@ -775,7 +711,7 @@ async def _send_quiz_question(update: Update, context: ContextTypes.DEFAULT_TYPE
 
     await reply_func(
         text,
-        parse_mode=ParseMode.MARKDOWN_V2,
+        parse_mode=ParseMode.HTML,
         reply_markup=keyboard,
     )
     return AWAITING_ANSWER
