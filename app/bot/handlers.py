@@ -41,7 +41,10 @@ from app.bot.keyboards import (
     ui_language_keyboard,
 )
 from app.bot.topics import TOPIC_KEYS, TOPIC_PACKS
-from app.bot.user_state import Section, get_section, set_section, clear_section
+from app.bot.user_state import (
+    Section, get_section, set_section, clear_section,
+    get_chat_history, append_chat_message, clear_chat_history,
+)
 from app.database.session import async_session_factory
 from app.services.gemini_service import WordExplanation, ReverseTranslation
 from app.services.ask_service import ask_service
@@ -394,7 +397,7 @@ async def _handle_words_section(update: Update, text: str, t) -> None:
 
 
 async def _handle_grammar_section(update: Update, text: str, t) -> None:
-    """Process text in the Grammar Q&A section."""
+    """Process text in the Grammar chatbot section."""
     user = update.effective_user
     logger.info("[GRAMMAR] user %d: %s", user.id, text[:80])
     await update.message.reply_text(t("ask_thinking"))
@@ -405,20 +408,28 @@ async def _handle_grammar_section(update: Update, text: str, t) -> None:
             native_lang = db_user.language
             learning_lang = db_user.learning_language
 
-        help_response = await ask_service.ask_question(
-            text,
+        # Get conversation history for this user
+        history = get_chat_history(user.id)
+
+        # Send to chatbot with full history
+        reply = await ask_service.chat(
+            user_message=text,
+            chat_history=history,
             native_language=native_lang,
             learning_language=learning_lang,
         )
 
-        # Send as plain text — the AI already formats it nicely in the user's language
-        await update.message.reply_text(help_response.answer)
+        # Save both messages to history
+        append_chat_message(user.id, "user", text)
+        append_chat_message(user.id, "assistant", reply)
+
+        await update.message.reply_text(reply)
 
     except ValueError as e:
-        logger.warning("Grammar question error: %s", e)
+        logger.warning("Grammar chat error: %s", e)
         await update.message.reply_text(t("ask_error"))
     except Exception:
-        logger.exception("Unexpected error in grammar help")
+        logger.exception("Unexpected error in grammar chat")
         await update.message.reply_text(t("ask_fatal"))
 
 
@@ -934,12 +945,22 @@ async def topics_callback(update: Update, context: ContextTypes.DEFAULT_TYPE) ->
 
 
 async def ask_handler(update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
-    """Handle /ask command — switch to Grammar Q&A section."""
+    """Handle /ask command — switch to Grammar chatbot section (new conversation)."""
     user = update.effective_user
     set_section(user.id, Section.GRAMMAR)
+    clear_chat_history(user.id)  # Start fresh conversation
     ui_lang = await _get_ui_lang(user.id)
     t = get_translator(ui_lang)
     await update.message.reply_text(t("section_grammar_active"), parse_mode=ParseMode.HTML)
+
+
+async def clear_handler(update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
+    """Handle /clear command — reset grammar chat history."""
+    user = update.effective_user
+    clear_chat_history(user.id)
+    ui_lang = await _get_ui_lang(user.id)
+    t = get_translator(ui_lang)
+    await update.message.reply_text(t("chat_cleared"))
 
 
 async def ielts_handler(update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
@@ -993,6 +1014,7 @@ def register_handlers(application: Application) -> None:
     application.add_handler(CommandHandler("learning", learning_handler))
     application.add_handler(CommandHandler("topics", topics_handler))
     application.add_handler(CommandHandler("ask", ask_handler))
+    application.add_handler(CommandHandler("clear", clear_handler))
     application.add_handler(CommandHandler("ielts", ielts_handler))
 
     # Text router — routes messages to correct section based on user state

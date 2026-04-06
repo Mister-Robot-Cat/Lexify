@@ -265,6 +265,11 @@ _STRINGS: dict[str, dict[str, str]] = {
         "ru": "❌ Сервис помощи недоступен. Попробуйте позже.",
         "az": "❌ Kömək xidməti mövcud deyil. Zəhmət olmasa sonra cəhd edin.",
     },
+    "chat_cleared": {
+        "en": "🗑 Chat history cleared. Start a new conversation!",
+        "ru": "🗑 История чата очищена. Начни новый разговор!",
+        "az": "🗑 Söhbət tarixçəsi silindi. Yeni söhbətə başla!",
+    },
 
     # Delete
     "delete_usage": {
