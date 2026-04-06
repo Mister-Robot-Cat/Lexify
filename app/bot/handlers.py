@@ -289,16 +289,85 @@ async def delete_handler(update: Update, context: ContextTypes.DEFAULT_TYPE) -> 
 # ─── Word processing (default text handler) ──────────────────────────────────
 
 async def word_handler(update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
-    """Handle plain text messages — treat as a word/phrase to learn."""
+    """Handle plain text messages — treat as a word/phrase to learn or IELTS evaluation."""
     user = update.effective_user
     text = update.message.text.strip()
     ui_lang = await _get_ui_lang(user.id)
     t = get_translator(ui_lang)
 
-    if not text or len(text) > 200:
+    if not text or len(text) > 500:
         await update.message.reply_text(t("word_too_long"))
         return
 
+    # Check if this should be IELTS evaluation (50+ characters)
+    if len(text) >= 50:
+        logger.info("IELTS evaluation request from user %d: %d characters", user.id, len(text))
+        await update.message.reply_text(t("ielts_evaluating"))
+
+        try:
+            evaluation = await ielts_service.evaluate_writing(text)
+            
+            message = (
+                f"📊 *{t('ielts_results')}*\n\n"
+                f"🎯 *{t('ielts_overall_score')}*: {evaluation.overall_score}/9\n\n"
+                f"📋 *{t('task_response')}*: {evaluation.task_response.score}/9\n"
+                f"✅ {evaluation.task_response.strengths}\n"
+                f"❌ {evaluation.task_response.weaknesses}\n"
+                f"💡 {evaluation.task_response.suggestions}\n\n"
+                f"🔗 *{t('coherence_cohesion')}*: {evaluation.coherence_cohesion.score}/9\n"
+                f"✅ {evaluation.coherence_cohesion.strengths}\n"
+                f"❌ {evaluation.coherence_cohesion.weaknesses}\n"
+                f"💡 {evaluation.coherence_cohesion.suggestions}\n\n"
+                f"📚 *{t('lexical_resource')}*: {evaluation.lexical_resource.score}/9\n"
+                f"✅ {evaluation.lexical_resource.strengths}\n"
+                f"❌ {evaluation.lexical_resource.weaknesses}\n"
+                f"💡 {evaluation.lexical_resource.suggestions}\n\n"
+                f"📝 *{t('grammatical_range')}*: {evaluation.grammatical_range.score}/9\n"
+                f"✅ {evaluation.grammatical_range.strengths}\n"
+                f"❌ {evaluation.grammatical_range.weaknesses}\n"
+                f"💡 {evaluation.grammatical_range.suggestions}\n\n"
+                f"📖 *{t('ielts_overall_feedback')}*\n{evaluation.overall_feedback}"
+            )
+            
+            # Escape special characters for MarkdownV2
+            try:
+                message = _escape_md(message)
+                await update.message.reply_text(message, parse_mode=ParseMode.MARKDOWN_V2)
+            except Exception as md_error:
+                logger.warning("Markdown formatting failed, sending plain text: %s", md_error)
+                # Fallback to plain text without formatting
+                plain_message = (
+                    f"📊 IELTS Evaluation Results\n\n"
+                    f"🎯 Overall Band Score: {evaluation.overall_score}/9\n\n"
+                    f"📋 Task Response: {evaluation.task_response.score}/9\n"
+                    f"✅ {evaluation.task_response.strengths}\n"
+                    f"❌ {evaluation.task_response.weaknesses}\n"
+                    f"💡 {evaluation.task_response.suggestions}\n\n"
+                    f"🔗 Coherence & Cohesion: {evaluation.coherence_cohesion.score}/9\n"
+                    f"✅ {evaluation.coherence_cohesion.strengths}\n"
+                    f"❌ {evaluation.coherence_cohesion.weaknesses}\n"
+                    f"💡 {evaluation.coherence_cohesion.suggestions}\n\n"
+                    f"📚 Lexical Resource: {evaluation.lexical_resource.score}/9\n"
+                    f"✅ {evaluation.lexical_resource.strengths}\n"
+                    f"❌ {evaluation.lexical_resource.weaknesses}\n"
+                    f"💡 {evaluation.lexical_resource.suggestions}\n\n"
+                    f"📝 Grammatical Range: {evaluation.grammatical_range.score}/9\n"
+                    f"✅ {evaluation.grammatical_range.strengths}\n"
+                    f"❌ {evaluation.grammatical_range.weaknesses}\n"
+                    f"💡 {evaluation.grammatical_range.suggestions}\n\n"
+                    f"📖 Overall Feedback:\n{evaluation.overall_feedback}"
+                )
+                await update.message.reply_text(plain_message)
+
+        except ValueError as e:
+            logger.warning("IELTS evaluation validation error: %s", e)
+            await update.message.reply_text(t("ielts_error"))
+        except Exception:
+            logger.exception("Unexpected error in IELTS evaluation")
+            await update.message.reply_text(t("ielts_fatal"))
+        return
+
+    # Regular word/phrase processing (under 50 characters)
     logger.info("Word request from user %d: '%s'", user.id, text)
     await update.message.reply_text(t("word_looking_up"))
 
@@ -789,82 +858,6 @@ async def ielts_handler(update: Update, context: ContextTypes.DEFAULT_TYPE) -> N
     await update.message.reply_text(message, parse_mode=ParseMode.MARKDOWN_V2)
 
 
-async def ielts_text_handler(update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
-    """Handle text for IELTS writing evaluation."""
-    user = update.effective_user
-    text = update.message.text.strip()
-    ui_lang = await _get_ui_lang(user.id)
-    t = get_translator(ui_lang)
-
-    # Only process IELTS evaluation for longer texts (50+ chars)
-    # Short texts are likely regular words/phrases
-    if len(text) < 50:
-        return  # Let word_handler process it
-
-    logger.info("IELTS evaluation request from user %d: %d characters", user.id, len(text))
-    await update.message.reply_text(t("ielts_evaluating"))
-
-    try:
-        evaluation = await ielts_service.evaluate_writing(text)
-        
-        message = (
-            f"📊 *{t('ielts_results')}*\n\n"
-            f"🎯 *{t('ielts_overall_score')}*: {evaluation.overall_score}/9\n\n"
-            f"📋 *{t('task_response')}*: {evaluation.task_response.score}/9\n"
-            f"✅ {evaluation.task_response.strengths}\n"
-            f"❌ {evaluation.task_response.weaknesses}\n"
-            f"💡 {evaluation.task_response.suggestions}\n\n"
-            f"🔗 *{t('coherence_cohesion')}*: {evaluation.coherence_cohesion.score}/9\n"
-            f"✅ {evaluation.coherence_cohesion.strengths}\n"
-            f"❌ {evaluation.coherence_cohesion.weaknesses}\n"
-            f"💡 {evaluation.coherence_cohesion.suggestions}\n\n"
-            f"📚 *{t('lexical_resource')}*: {evaluation.lexical_resource.score}/9\n"
-            f"✅ {evaluation.lexical_resource.strengths}\n"
-            f"❌ {evaluation.lexical_resource.weaknesses}\n"
-            f"💡 {evaluation.lexical_resource.suggestions}\n\n"
-            f"📝 *{t('grammatical_range')}*: {evaluation.grammatical_range.score}/9\n"
-            f"✅ {evaluation.grammatical_range.strengths}\n"
-            f"❌ {evaluation.grammatical_range.weaknesses}\n"
-            f"💡 {evaluation.grammatical_range.suggestions}\n\n"
-            f"📖 *{t('ielts_overall_feedback')}*\n{evaluation.overall_feedback}"
-        )
-        
-        # Escape special characters for MarkdownV2
-        try:
-            message = _escape_md(message)
-            await update.message.reply_text(message, parse_mode=ParseMode.MARKDOWN_V2)
-        except Exception as md_error:
-            logger.warning("Markdown formatting failed, sending plain text: %s", md_error)
-            # Fallback to plain text without formatting
-            plain_message = (
-                f"📊 IELTS Evaluation Results\n\n"
-                f"🎯 Overall Band Score: {evaluation.overall_score}/9\n\n"
-                f"📋 Task Response: {evaluation.task_response.score}/9\n"
-                f"✅ {evaluation.task_response.strengths}\n"
-                f"❌ {evaluation.task_response.weaknesses}\n"
-                f"💡 {evaluation.task_response.suggestions}\n\n"
-                f"🔗 Coherence & Cohesion: {evaluation.coherence_cohesion.score}/9\n"
-                f"✅ {evaluation.coherence_cohesion.strengths}\n"
-                f"❌ {evaluation.coherence_cohesion.weaknesses}\n"
-                f"💡 {evaluation.coherence_cohesion.suggestions}\n\n"
-                f"📚 Lexical Resource: {evaluation.lexical_resource.score}/9\n"
-                f"✅ {evaluation.lexical_resource.strengths}\n"
-                f"❌ {evaluation.lexical_resource.weaknesses}\n"
-                f"💡 {evaluation.lexical_resource.suggestions}\n\n"
-                f"📝 Grammatical Range: {evaluation.grammatical_range.score}/9\n"
-                f"✅ {evaluation.grammatical_range.strengths}\n"
-                f"❌ {evaluation.grammatical_range.weaknesses}\n"
-                f"💡 {evaluation.grammatical_range.suggestions}\n\n"
-                f"📖 Overall Feedback:\n{evaluation.overall_feedback}"
-            )
-            await update.message.reply_text(plain_message)
-
-    except ValueError as e:
-        logger.warning("IELTS evaluation validation error: %s", e)
-        await update.message.reply_text(t("ielts_error"))
-    except Exception:
-        logger.exception("Unexpected error in IELTS evaluation")
-        await update.message.reply_text(t("ielts_fatal"))
 
 
 # ─── Error handler ────────────────────────────────────────────────────────────
@@ -908,8 +901,7 @@ def register_handlers(application: Application) -> None:
     application.add_handler(CommandHandler("ielts", ielts_handler))
 
     # Message handlers (order matters!)
-    # IELTS text handler should come before general word handler
-    application.add_handler(MessageHandler(filters.TEXT & ~filters.COMMAND, ielts_text_handler))
+    # Word handler should come first - it will delegate to IELTS if needed
     application.add_handler(MessageHandler(filters.TEXT & ~filters.COMMAND, word_handler))
 
     # Callback handlers
