@@ -47,6 +47,7 @@ async def lifespan(app: FastAPI):
         BotCommand("quiz", "🎯 Practice your vocabulary"),
         BotCommand("library", "📚 View your word collection"),
         BotCommand("topics", "📦 Themed word packs"),
+        BotCommand("ask", "❓ Grammar & language help"),
         BotCommand("ielts", "📝 IELTS writing evaluation"),
         BotCommand("language", "🌍 Choose translation language"),
         BotCommand("learning", "📖 Choose language to learn"),

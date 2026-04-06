@@ -10,19 +10,15 @@ from __future__ import annotations
 # ─── Supported UI languages ──────────────────────────────────────────────────
 
 UI_LANGUAGES: dict[str, str] = {
-    "en": "🇬🇧 English",
-    "ru": "🇷🇺 Русский",
-    "tr": "🇹🇷 Türkçe",
-    "es": "🇪🇸 Español",
-    "fr": "🇫🇷 Français",
-    "de": "🇩🇪 Deutsch",
-    "pt": "🇧🇷 Português",
-    "zh": "🇨🇳 中文",
-    "ar": "🇸🇦 العربية",
-    "ja": "🇯🇵 日本語",
-    "ko": "🇰🇷 한국어",
-    "it": "🇮🇹 Italiano",
-    "hi": "🇮🇳 हिन्दी",
+    "en": "English",
+    "ru": "Русский",
+    "az": "Azərbaycanca"
+}
+
+SUPPORTED_LANGUAGES = {
+    "en": "English",
+    "ru": "Русский", 
+    "az": "Azərbaycanca"
 }
 
 # ─── Translation tables ──────────────────────────────────────────────────────
@@ -34,7 +30,7 @@ _STRINGS: dict[str, dict[str, str]] = {
     "welcome": {
         "en": "👋 Welcome to *Lexify*, {name}\\!\n\nI help you learn vocabulary\\.\n\n📌 *How to use:*\n• Send me any word or phrase \\— I'll explain it and save it\\.\n• /quiz \\— practice your vocabulary\n• /library \\— view your word collection\n• /language \\— choose translation language\n• /learning \\— choose what language to learn\n• /ui \\— change bot interface language\n• /topics \\— themed word packs\n• /delete \\<word\\> \\— remove a word\n• /progress \\— see your learning stats\n\nLet's start learning\\! 🚀",
         "ru": "👋 Добро пожаловать в *Lexify*, {name}\\!\n\nЯ помогу тебе учить слова\\.\n\n📌 *Как пользоваться:*\n• Отправь мне любое слово или фразу \\— я объясню и сохраню\\.\n• /quiz \\— тренировка словарного запаса\n• /library \\— твоя коллекция слов\n• /language \\— выбрать язык перевода\n• /learning \\— выбрать изучаемый язык\n• /ui \\— сменить язык интерфейса\n• /topics \\— тематические наборы слов\n• /delete \\<слово\\> \\— удалить слово\n• /progress \\— статистика обучения\n\nНачнём учиться\\! 🚀",
-        "tr": "👋 *Lexify*'a hoş geldin, {name}\\!\n\nKelime öğrenmene yardımcı oluyorum\\.\n\n📌 *Nasıl kullanılır:*\n• Bana herhangi bir kelime veya ifade gönder \\— açıklayıp kaydedeceğim\\.\n• /quiz \\— kelime pratiği\n• /library \\— kelime koleksiyonun\n• /language \\— çeviri dilini seç\n• /learning \\— öğrenilecek dili seç\n• /ui \\— arayüz dilini değiştir\n• /topics \\— tematik kelime paketleri\n• /delete \\<kelime\\> \\— kelimeyi sil\n• /progress \\— öğrenme istatistikleri\n\nHaydi öğrenmeye başlayalım\\! 🚀",
+        "az": "👋 *Lexify*'a xoş gəldin, {name}\\!\n\nSənə sözləri öyrənməyə kömək edirəm\\.\n\n📌 *Necə istifadə etmək:*\n• Mənə hər hansı söz və ya ifadə göndər \\— mən izah edərəm və saxlayacağam\\.\n• /quiz \\— lüğət məşqi\n• /library \\— söz kolleksiyan\n• /language \\— tərcümə dilini seç\n• /learning \\— öyrəniləcək dili seç\n• /ui \\— interfeys dilini dəyiş\n• /topics \\— tematik söz paketləri\n• /delete \\<söz\\> \\— sözü sil\n• /progress \\— öyrənmə statistikaları\n\nÖyrənməyə başlayaq\\! 🚀",
     },
 
     # /progress

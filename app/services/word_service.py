@@ -203,15 +203,19 @@ class WordService:
         Returns 'native' if text appears to be in user's native language,
         'learning' if it appears to be in learning language.
         """
-        # Simple heuristic: check for Cyrillic characters (Russian) vs Latin
+        # Simple heuristic: check for Cyrillic characters (Russian/Azerbaijani) vs Latin
         has_cyrillic = any('\u0400' <= c <= '\u04FF' for c in text)
         has_latin = any('a' <= c.lower() <= 'z' for c in text)
+        has_azerbaijani_specific = any(c in ['ə', 'ı', 'ö', 'ü', 'ğ', 'ç', 'ş'] for c in text.lower())
         
-        # If text has Cyrillic and user's native is Russian, assume native language
-        if has_cyrillic and user_language == "Russian":
+        # If text has Cyrillic and user's native is Russian/Azerbaijani, assume native language
+        if has_cyrillic and user_language in ["Russian", "Azerbaijani"]:
+            return "native"
+        # If text has Azerbaijani specific characters and user's native is Azerbaijani
+        elif has_azerbaijani_specific and user_language == "Azerbaijani":
             return "native"
         # If text has only Latin and learning language is English, assume learning language
-        elif has_latin and not has_cyrillic and learning_language == "English":
+        elif has_latin and not has_cyrillic and not has_azerbaijani_specific and learning_language == "English":
             return "learning"
         # Default: assume learning language for mixed/unclear cases
         else:

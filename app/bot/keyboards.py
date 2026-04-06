@@ -19,34 +19,15 @@ MODE_CHOICES = "choices"        # EN word → pick from 4 buttons
 # Supported target / native languages
 LANGUAGES = {
     "Russian": "🇷🇺 Русский",
-    "Turkish": "🇹🇷 Türkçe",
-    "Spanish": "🇪🇸 Español",
-    "French": "🇫🇷 Français",
-    "German": "🇩🇪 Deutsch",
-    "Chinese": "🇨🇳 中文",
-    "Arabic": "🇸🇦 العربية",
-    "Portuguese": "🇧🇷 Português",
-    "Japanese": "🇯🇵 日本語",
-    "Korean": "🇰🇷 한국어",
-    "Italian": "🇮🇹 Italiano",
-    "Hindi": "🇮🇳 हिन्दी",
+    "Azerbaijani": "�� Azərbaycanca",
+    "English": "�� English"
 }
 
 # Languages available for learning
 LEARNING_LANGUAGES = {
     "English": "🇬🇧 English",
     "Russian": "🇷🇺 Русский",
-    "Turkish": "🇹🇷 Türkçe",
-    "Spanish": "🇪🇸 Español",
-    "French": "🇫🇷 Français",
-    "German": "🇩🇪 Deutsch",
-    "Chinese": "🇨🇳 中文",
-    "Arabic": "🇸🇦 العربية",
-    "Portuguese": "🇧🇷 Português",
-    "Japanese": "🇯🇵 日本語",
-    "Korean": "🇰🇷 한국어",
-    "Italian": "🇮🇹 Italiano",
-    "Hindi": "🇮🇳 हिन्दी",
+    "Azerbaijani": "🇦🇿 Azərbaycanca"
 }
 
 
@@ -122,7 +103,7 @@ def language_keyboard(current_lang: str = "Russian") -> InlineKeyboardMarkup:
 
 def ui_language_keyboard(current: str = "en") -> InlineKeyboardMarkup:
     """Inline keyboard for UI language selection."""
-    from app.bot.i18n import UI_LANGUAGES
+    from app.bot.i18n_simple import UI_LANGUAGES
     buttons = []
     row: list[InlineKeyboardButton] = []
     for code, label in UI_LANGUAGES.items():
