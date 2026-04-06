@@ -63,16 +63,6 @@ async def _get_ui_lang(telegram_id: int) -> str:
         return await word_service.get_ui_language(session, telegram_id)
 
 
-def _escape_md(text: str) -> str:
-    """Escape Telegram MarkdownV2 special characters."""
-    # All special characters that must be escaped in MarkdownV2
-    special_chars = ['_', '*', '[', ']', '(', ')', '~', '`', '>', '#', '+', '-', '=', '|', '{', '}', '.', '!']
-    escaped = text
-    for char in special_chars:
-        escaped = escaped.replace(char, f"\\{char}")
-    return escaped
-
-
 def _format_word(word) -> str:
     """Format a Word model into a Telegram-friendly message."""
     translation = _escape_md(word.translation).replace("\n", "\n    ")

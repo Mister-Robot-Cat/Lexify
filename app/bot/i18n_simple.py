@@ -266,7 +266,46 @@ _STRINGS: dict[str, dict[str, str]] = {
         "az": "❌ Kömək xidməti mövcud deyil. Zəhmət olmasa sonra cəhd edin.",
     },
 
+    # Delete
+    "delete_usage": {
+        "en": "Usage: /delete <word>",
+        "ru": "Использование: /delete <слово>",
+        "az": "İstifadə: /delete <söz>",
+    },
+
+    # Reminders
+    "reminder_title": {
+        "en": "🔔 <b>Review Reminder</b>",
+        "ru": "🔔 <b>Напоминание о повторении</b>",
+        "az": "🔔 <b>Təkrar Xatırlatması</b>",
+    },
+    "reminder_body": {
+        "en": "You have <b>{count}</b> words due for review. Use /quiz to practice!",
+        "ru": "У тебя <b>{count}</b> слов на повторение. Используй /quiz для практики!",
+        "az": "Təkrar üçün <b>{count}</b> sözün var. Məşq üçün /quiz istifadə et!",
+    },
+    "wotd_title": {
+        "en": "🌟 <b>Word of the Day</b>",
+        "ru": "🌟 <b>Слово дня</b>",
+        "az": "🌟 <b>Günün Sözü</b>",
+    },
+
     # Quiz
+    "btn_classic": {
+        "en": "🔤 Word → Translation",
+        "ru": "🔤 Слово → Перевод",
+        "az": "🔤 Söz → Tərcümə",
+    },
+    "btn_reverse": {
+        "en": "🔄 Translation → Word",
+        "ru": "🔄 Перевод → Слово",
+        "az": "🔄 Tərcümə → Söz",
+    },
+    "btn_choices": {
+        "en": "🅰️ Multiple Choice",
+        "ru": "🅰️ Выбор из вариантов",
+        "az": "🅰️ Çoxlu Seçim",
+    },
     "quiz_choose_mode": {
         "en": "🧠 *Choose quiz mode:*",
         "ru": "🧠 *Выбери режим квиза:*",
@@ -311,6 +350,51 @@ _STRINGS: dict[str, dict[str, str]] = {
         "en": "⏭ *Skipped\\!* 📖 Correct answer: *{answer}*",
         "ru": "⏭ *Пропущено\\!* 📖 Правильный ответ: *{answer}*",
         "az": "⏭ *Ötərildi\\!* 📖 Düzgün cavab: *{answer}*",
+    },
+    "quiz_classic_q": {
+        "en": "🎯 Translate this word:\n\n📖 *{word}*",
+        "ru": "🎯 Переведи это слово:\n\n📖 *{word}*",
+        "az": "🎯 Bu sözü tərcümə et:\n\n📖 *{word}*",
+    },
+    "quiz_reverse_q": {
+        "en": "🎯 What word matches this translation?\n\n🌐 *{translation}*",
+        "ru": "🎯 Какое слово соответствует переводу?\n\n🌐 *{translation}*",
+        "az": "🎯 Bu tərcüməyə hansı söz uyğundur?\n\n🌐 *{translation}*",
+    },
+    "quiz_choices_q": {
+        "en": "🎯 Choose the correct translation:\n\n📖 *{word}*",
+        "ru": "🎯 Выбери правильный перевод:\n\n📖 *{word}*",
+        "az": "🎯 Düzgün tərcüməni seç:\n\n📖 *{word}*",
+    },
+    "quiz_no_words": {
+        "en": "📚 You don't have any words yet\\. Send me a word to get started\\!",
+        "ru": "📚 У тебя пока нет слов\\. Отправь мне слово, чтобы начать\\!",
+        "az": "📚 Hələ sözün yoxdur\\. Başlamaq üçün mənə bir söz göndər\\!",
+    },
+    "quiz_no_active": {
+        "en": "No active quiz. Use /quiz to start one.",
+        "ru": "Нет активного квиза. Используй /quiz чтобы начать.",
+        "az": "Aktiv quiz yoxdur. Başlamaq üçün /quiz istifadə et.",
+    },
+    "quiz_ended": {
+        "en": "❌ *Quiz ended\\.*",
+        "ru": "❌ *Квиз завершён\\.*",
+        "az": "❌ *Quiz bitdi\\.*",
+    },
+    "quiz_streak": {
+        "en": "🔥 Streak: *{count}* correct in a row\\!",
+        "ru": "🔥 Серия: *{count}* правильных подряд\\!",
+        "az": "🔥 Seriya: ardıcıl *{count}* doğru\\!",
+    },
+    "quiz_correct_answer": {
+        "en": "📖 Correct answer: *{answer}*",
+        "ru": "📖 Правильный ответ: *{answer}*",
+        "az": "📖 Düzgün cavab: *{answer}*",
+    },
+    "quiz_your_answer": {
+        "en": "✏️ Your answer: *{answer}*",
+        "ru": "✏️ Твой ответ: *{answer}*",
+        "az": "✏️ Sənin cavabın: *{answer}*",
     },
 
     # Word processing

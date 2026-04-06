@@ -20,8 +20,8 @@ MODE_CHOICES = "choices"        # EN word → pick from 4 buttons
 # Supported target / native languages
 LANGUAGES = {
     "Russian": "🇷🇺 Русский",
-    "Azerbaijani": "�� Azərbaycanca",
-    "English": "�� English"
+    "Azerbaijani": "🇦🇿 Azərbaycanca",
+    "English": "🇬🇧 English"
 }
 
 # Languages available for learning

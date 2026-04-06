@@ -8,7 +8,7 @@ from sqlalchemy import select
 from sqlalchemy.orm import joinedload
 from telegram.ext import ContextTypes
 
-from app.bot.i18n import get_translator
+from app.bot.i18n_simple import get_translator
 from app.database.models import User, UserWord, Word
 from app.database.session import async_session_factory
 
