@@ -78,6 +78,12 @@ class WordService:
         self, session: AsyncSession, telegram_id: int, text: str
     ) -> tuple[Word | ReverseTranslation, bool]:
         """Process a word/phrase: look up existing, or fetch from AI and create."""
+        if not text or len(text.strip()) == 0:
+            raise ValueError("Empty text provided")
+            
+        if len(text.strip()) > 500:
+            raise ValueError("Text too long (maximum 500 characters)")
+            
         user = await self.get_or_create_user(session, telegram_id)
         
         # Detect if input is in native or learning language
@@ -85,24 +91,32 @@ class WordService:
         
         if lang_type == "native":
             # User wrote in native language - provide reverse translation options
-            reverse_result = await groq_service.reverse_translate(
-                text,
-                language=user.language,
-                learning_language=user.learning_language,
-            )
-            return reverse_result, False  # Not creating a word entry for reverse translations
-        else:
-            # User wrote in learning language - normal flow
-            word = await self.find_word(session, text, language=user.language)
-            if word is None:
-                explanation = await groq_service.explain_word(
+            try:
+                reverse_result = await groq_service.reverse_translate(
                     text,
                     language=user.language,
                     learning_language=user.learning_language,
                 )
-                word = await self.create_word(session, explanation, language=user.language)
-            _, created = await self.link_word_to_user(session, user, word)
-            return word, created
+                return reverse_result, False  # Not creating a word entry for reverse translations
+            except Exception as e:
+                logger.warning("Reverse translation failed for user %d: %s", telegram_id, str(e))
+                raise ValueError(f"Translation failed: {str(e)}")
+        else:
+            # User wrote in learning language - normal flow
+            try:
+                word = await self.find_word(session, text, language=user.language)
+                if word is None:
+                    explanation = await groq_service.explain_word(
+                        text,
+                        language=user.language,
+                        learning_language=user.learning_language,
+                    )
+                    word = await self.create_word(session, explanation, language=user.language)
+                _, created = await self.link_word_to_user(session, user, word)
+                return word, created
+            except Exception as e:
+                logger.warning("Word processing failed for user %d: %s", telegram_id, str(e))
+                raise ValueError(f"Word processing failed: {str(e)}")
 
     async def set_user_language(
         self, session: AsyncSession, telegram_id: int, language: str

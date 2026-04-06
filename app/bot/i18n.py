@@ -180,6 +180,76 @@ _STRINGS: dict[str, dict[str, str]] = {
         "ru": "Когда использовать",
         "tr": "Ne zaman kullan",
     },
+    "ielts_title": {
+        "en": "📝 IELTS Writing Evaluation",
+        "ru": "📝 Оценка письма IELTS",
+        "tr": "📝 IELTS Yazım Değerlendirmesi",
+    },
+    "ielts_instructions": {
+        "en": "Send your writing sample (minimum 50 characters) and get detailed feedback according to IELTS criteria:\n\n• Task Response (TR)\n• Coherence and Cohesion (CC)\n• Lexical Resource (LR)\n• Grammatical Range and Accuracy (GRA)",
+        "ru": "Отправьте свой текст (минимум 50 символов) и получите подробную обратную связь по критериям IELTS:\n\n• Task Response (TR)\n• Coherence and Cohesion (CC)\n• Lexical Resource (LR)\n• Grammatical Range and Accuracy (GRA)",
+        "tr": "Yazı örneğinizi gönderin (en az 50 karakter) ve IELTS kriterlerine göre ayrıntılı geri bildirim alın:\n\n• Task Response (TR)\n• Coherence and Cohesion (CC)\n• Lexical Resource (LR)\n• Grammatical Range and Accuracy (GRA)",
+    },
+    "ielts_send_text": {
+        "en": "📤 Send your text now:",
+        "ru": "📤 Отправьте ваш текст:",
+        "tr": "📤 Metninizi şimdi gönderin:",
+    },
+    "ielts_text_too_short": {
+        "en": "⚠️ Text too short for evaluation (minimum 50 characters).",
+        "ru": "⚠️ Текст слишком короткий для оценки (минимум 50 символов).",
+        "tr": "⚠️ Değerlendirme için metin çok kısa (en az 50 karakter).",
+    },
+    "ielts_evaluating": {
+        "en": "📊 Evaluating your writing...",
+        "ru": "📊 Оцениваю ваше письмо...",
+        "tr": "📊 Yazınız değerlendiriliyor...",
+    },
+    "ielts_results": {
+        "en": "📊 IELTS Evaluation Results",
+        "ru": "📊 Результаты оценки IELTS",
+        "tr": "📊 IELTS Değerlendirme Sonuçları",
+    },
+    "ielts_overall_score": {
+        "en": "Overall Band Score",
+        "ru": "Общий балл",
+        "tr": "Genel Bant Puanı",
+    },
+    "task_response": {
+        "en": "Task Response",
+        "ru": "Task Response",
+        "tr": "Task Response",
+    },
+    "coherence_cohesion": {
+        "en": "Coherence & Cohesion",
+        "ru": "Coherence & Cohesion",
+        "tr": "Coherence & Cohesion",
+    },
+    "lexical_resource": {
+        "en": "Lexical Resource",
+        "ru": "Lexical Resource",
+        "tr": "Lexical Resource",
+    },
+    "grammatical_range": {
+        "en": "Grammatical Range",
+        "ru": "Grammatical Range",
+        "tr": "Grammatical Range",
+    },
+    "ielts_overall_feedback": {
+        "en": "Overall Feedback",
+        "ru": "Общая обратная связь",
+        "tr": "Genel Geri Bildirim",
+    },
+    "ielts_error": {
+        "en": "⚠️ Could not evaluate your text. Please try again.",
+        "ru": "⚠️ Не удалось оценить текст. Попробуйте еще раз.",
+        "tr": "⚠️ Metniniz değerlendirilemedi. Lütfen tekrar deneyin.",
+    },
+    "ielts_fatal": {
+        "en": "❌ Evaluation service unavailable. Please try later.",
+        "ru": "❌ Сервис оценки недоступен. Попробуйте позже.",
+        "tr": "❌ Değerlendirme hizmeti kullanılamıyor. Lütfen daha sonra tekrar deneyin.",
+    },
 
     # Quiz
     "quiz_choose_mode": {
