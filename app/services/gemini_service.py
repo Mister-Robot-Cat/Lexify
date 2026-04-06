@@ -14,14 +14,18 @@ The student is learning: {learning_language}
 The student sent: "{word}"
 The student's native language is: {native_language}
 
-IMPORTANT: If the word is misspelled, correct it. In the "Word:" field always return the CORRECT {learning_language} spelling.
-If the word has multiple meanings, list ALL common meanings numbered (1. 2. 3.) in both Translation and Meaning fields.
+CRITICAL RULES:
+1. If the word is misspelled, correct it. In the "Word:" field always return the CORRECT {learning_language} spelling.
+2. If the word has multiple meanings, list ALL common meanings numbered (1. 2. 3.) in both Translation and Meaning fields.
+3. The "Translation" field MUST be ONLY in {native_language}. Do NOT mix in any other languages. Do NOT add Chinese, Arabic, Japanese or any other language — ONLY {native_language}.
+4. The "Meaning" field MUST be ONLY in {learning_language}.
+5. ALL fields must use ONLY the two languages specified: {native_language} for translations and {learning_language} for everything else.
 
 Return STRICTLY in this format (no extra text, no markdown):
 
 Word: <the correctly spelled word or phrase in {learning_language}>
-Translation: <all translations to {native_language}, numbered if multiple: 1. ... 2. ... 3. ...>
-Meaning: <all definitions in {learning_language}, numbered if multiple: 1. ... 2. ... 3. ...>
+Translation: <translations ONLY in {native_language}, numbered if multiple: 1. ... 2. ... 3. ...>
+Meaning: <definitions ONLY in {learning_language}, numbered if multiple: 1. ... 2. ... 3. ...>
 Example: <example sentence using the word in {learning_language}>
 Simple Explanation: <easy explanation in simple {learning_language}>
 Level: <CEFR level: A1, A2, B1, B2, C1, or C2>
@@ -33,16 +37,20 @@ REVERSE_PROMPT_TEMPLATE = """You are a language teacher helping students learn v
 The student is learning: {learning_language}
 The student sent: "{word}" in their native language: {native_language}
 
-IMPORTANT: Provide multiple translation options from {native_language} to {learning_language}. 
-If the phrase has multiple meanings, provide ALL common translations numbered (1. 2. 3.).
+CRITICAL RULES:
+1. Provide multiple translation options from {native_language} to {learning_language}.
+2. If the phrase has multiple meanings, provide ALL common translations numbered (1. 2. 3.).
+3. Use ONLY {native_language} and {learning_language} in your response. Do NOT add Chinese, Arabic, Japanese or any other language.
+4. Translations and Examples MUST be in {learning_language}.
+5. Context explanations should be in {native_language} so the student understands easily.
 
 Return STRICTLY in this format (no extra text, no markdown):
 
 Word: <the original word/phrase in {native_language}>
-Translations: <all translations to {learning_language}, numbered: 1. ... 2. ... 3. ...>
+Translations: <all translations ONLY in {learning_language}, numbered: 1. ... 2. ... 3. ...>
 Meanings: <explanations of each translation in {learning_language}, numbered to match: 1. ... 2. ... 3. ...>
 Examples: <example sentences for each translation in {learning_language}, numbered: 1. ... 2. ... 3. ...>
-Context: <explain when to use each translation, numbered: 1. ... 2. ... 3. ...>"""
+Context: <explain when to use each translation in {native_language}, numbered: 1. ... 2. ... 3. ...>"""
 
 
 @dataclass(frozen=True)
