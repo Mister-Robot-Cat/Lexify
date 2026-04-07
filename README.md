@@ -6,9 +6,11 @@
 
 ## Features
 
-- **🌍 Multilingual Interface** — Bot supports 13 UI languages (English, Russian, Turkish, Spanish, French, German, Chinese, Arabic, Portuguese, Japanese, Korean, Italian, Hindi)
+- **🌍 Multilingual Interface** — Bot UI in English, Russian, and Azerbaijani
 - **📖 Bidirectional Translation** — Write in English OR your native language. Get AI-generated explanations and multiple translation options
-- **🎯 Choose Any Learning Language** — Learn English, Russian, Turkish, Spanish, French, German, Chinese, Arabic, Portuguese, Japanese, Korean, Italian, or Hindi
+- **🎯 Choose Any Learning Language** — Learn English, Russian, or Azerbaijani
+- **❓ Grammar Chatbot** — Conversational AI tutor for grammar, vocabulary, and language questions with chat history
+- **📝 IELTS Writing Evaluation** — Get detailed IELTS band scores and feedback on your essays
 - **📦 Themed Word Packs** — Quick-start vocabulary with curated packs: Travel, Business, IELTS, Technology, Food, Health, Entertainment, Nature
 - **🌟 Word of the Day** — Daily broadcast of interesting words to all users
 - **📚 Personal Vocabulary** — Every word is saved to your personal dictionary
@@ -34,11 +36,14 @@ app/
 ├── bot/
 │   ├── handlers.py          # Telegram command & message handlers
 │   ├── keyboards.py         # Inline keyboard builders
-│   ├── i18n.py              # Internationalization system
+│   ├── i18n_simple.py       # Internationalization (i18n) system
+│   ├── user_state.py        # Section routing & chat history state
 │   ├── topics.py            # Themed word packs data
 │   └── reminders.py         # Daily jobs (Word of the Day, reminders)
 ├── services/
-│   ├── gemini_service.py    # Groq API integration (renamed from gemini)
+│   ├── groq_service.py      # Groq API — word explanations & translations
+│   ├── ask_service.py       # Groq API — grammar chatbot
+│   ├── ielts_service.py     # Groq API — IELTS writing evaluation
 │   ├── word_service.py      # Word CRUD and user management
 │   └── quiz_service.py      # Quiz logic and spaced repetition
 └── database/
@@ -124,22 +129,28 @@ Then deploy behind a reverse proxy (e.g., nginx) pointing to port 8000.
 
 ## Bot Commands
 
-| Command        | Description                              |
-|----------------|------------------------------------------|
-| `/start`       | Welcome message and instructions         |
-| `/quiz`        | Start a vocabulary quiz                  |
-| `/library`     | View your word collection                |
-| `/topics`      | Browse themed word packs                 |
-| `/language`    | Choose translation language              |
-| `/learning`    | Choose what language to learn            |
-| `/ui`          | Change bot interface language             |
-| `/progress`    | View your learning statistics            |
-| `/delete <word>` | Remove a word from your library        |
-| `/cancel`      | Cancel active quiz                       |
+| Command          | Description                              |
+|------------------|------------------------------------------|
+| `/start`         | Welcome message and instructions         |
+| `/menu`          | Choose section (Words/Grammar/IELTS)     |
+| `/quiz`          | Start a vocabulary quiz                  |
+| `/library`       | View your word collection                |
+| `/topics`        | Browse themed word packs                 |
+| `/ask`           | Grammar chatbot (new conversation)       |
+| `/clear`         | Clear grammar chat history               |
+| `/ielts`         | IELTS writing evaluation                 |
+| `/language`      | Choose translation language              |
+| `/learning`      | Choose what language to learn            |
+| `/ui`            | Change bot interface language            |
+| `/progress`      | View your learning statistics            |
+| `/delete <word>` | Remove a word from your library          |
+| `/cancel`        | Cancel active quiz                       |
 
 **How to use:**
 - **Type any word/phrase** in English → get detailed explanation and save to vocabulary
 - **Type in your native language** → get multiple translation options with examples
+- **Use `/menu`** → switch between Word Lookup, Grammar Q&A, and IELTS Writing sections
+- **Use `/ask`** → chat with AI tutor about grammar, vocabulary, or language questions
 - **Use `/topics`** → quickly add themed vocabulary (Travel, Business, IELTS, etc.)
 - **Practice with `/quiz`** → 3 quiz modes with spaced repetition
 
@@ -153,7 +164,7 @@ Then deploy behind a reverse proxy (e.g., nginx) pointing to port 8000.
 
 **User preferences stored:**
 - `language` — Native/translation language (Russian, Turkish, etc.)
-- `ui_language` — Bot interface language (en, ru, tr, etc.) 
+- `ui_language` — Bot interface language (en, ru, az)
 - `learning_language` — Target language to learn (English, Russian, etc.)
 
 ## Environment Variables
@@ -163,6 +174,7 @@ Then deploy behind a reverse proxy (e.g., nginx) pointing to port 8000.
 | `TELEGRAM_BOT_TOKEN` | Yes      | Telegram Bot API token               |
 | `DATABASE_URL`       | Yes      | MySQL async connection string        |
 | `GROQ_API_KEY`       | Yes      | Groq API key for LLM access         |
+| `GROQ_MODEL`         | No       | Groq model name (default: llama-3.3-70b-versatile) |
 | `LOG_LEVEL`          | No       | Logging level (default: INFO)        |
 | `BOT_MODE`           | No       | `polling` or `webhook` (default: polling) |
 | `WEBHOOK_URL`        | No       | Required when BOT_MODE=webhook       |

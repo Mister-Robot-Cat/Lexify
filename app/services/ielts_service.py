@@ -1,6 +1,6 @@
 import logging
+import re
 from dataclasses import dataclass
-from typing import Dict, List
 
 from groq import AsyncGroq
 
@@ -118,8 +118,6 @@ class IELTSService:
     @staticmethod
     def _parse_evaluation(text: str) -> IELTSWritingEvaluation:
         """Parse the IELTS evaluation response from Groq."""
-        import re
-        
         def parse_criterion(criterion_name: str, text: str) -> IELTSCriteria:
             # Extract score with more flexible pattern
             score_patterns = [

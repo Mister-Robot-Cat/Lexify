@@ -1,4 +1,5 @@
 import logging
+import random as _random
 
 from telegram import Update
 from telegram.constants import ParseMode
@@ -46,7 +47,7 @@ from app.bot.user_state import (
     get_chat_history, append_chat_message, clear_chat_history,
 )
 from app.database.session import async_session_factory
-from app.services.gemini_service import WordExplanation, ReverseTranslation
+from app.services.groq_service import WordExplanation, ReverseTranslation
 from app.services.ask_service import ask_service
 from app.services.ielts_service import ielts_service
 from app.services.quiz_service import quiz_service
@@ -429,7 +430,7 @@ async def _handle_ielts_section(update: Update, text: str, t) -> None:
             f"{_crit('🔗', t('coherence_cohesion'), evaluation.coherence_cohesion)}\n\n"
             f"{_crit('📚', t('lexical_resource'), evaluation.lexical_resource)}\n\n"
             f"{_crit('📝', t('grammatical_range'), evaluation.grammatical_range)}\n\n"
-            f"� <b>{t('ielts_overall_feedback')}</b>\n{_h(evaluation.overall_feedback)}"
+            f"💬 <b>{t('ielts_overall_feedback')}</b>\n{_h(evaluation.overall_feedback)}"
         )
         await update.message.reply_text(message, parse_mode=ParseMode.HTML)
 
@@ -471,9 +472,6 @@ async def text_router(update: Update, context: ContextTypes.DEFAULT_TYPE) -> Non
 
 
 # ─── Quiz flow (ConversationHandler) ─────────────────────────────────────────
-
-import random as _random
-
 
 async def _quiz_mode_menu(user_id: int, reply_func) -> int:
     """Show quiz mode selection keyboard (shared by command and button)."""
@@ -906,8 +904,6 @@ async def ielts_handler(update: Update, context: ContextTypes.DEFAULT_TYPE) -> N
     ui_lang = await _get_ui_lang(user.id)
     t = get_translator(ui_lang)
     await update.message.reply_text(t("section_ielts_active"), parse_mode=ParseMode.HTML)
-
-
 
 
 # ─── Error handler ────────────────────────────────────────────────────────────

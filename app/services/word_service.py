@@ -5,7 +5,7 @@ from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.database.models import User, UserWord, Word
 from app.database.session import async_session_factory
-from app.services.gemini_service import WordExplanation, ReverseTranslation, groq_service
+from app.services.groq_service import WordExplanation, ReverseTranslation, groq_service
 
 logger = logging.getLogger(__name__)
 
@@ -34,7 +34,7 @@ class WordService:
         return result.scalar_one_or_none()
 
     async def create_word(self, session: AsyncSession, explanation: WordExplanation, language: str = "Russian") -> Word:
-        """Persist a new Word record from a Gemini explanation."""
+        """Persist a new Word record from a Groq AI explanation."""
         word = Word(
             word=explanation.word.lower(),
             language=language,
