@@ -191,7 +191,7 @@ class GroqService:
                 model=self._model,
                 messages=[{"role": "user", "content": prompt}],
                 temperature=0.3,
-                max_tokens=512,
+                max_tokens=256,
             )
             raw_text = response.choices[0].message.content.strip()
             logger.debug("Groq raw response:\n%s", raw_text)
@@ -319,7 +319,7 @@ class GroqService:
                 model=self._model,
                 messages=[{"role": "user", "content": prompt}],
                 temperature=0.3,
-                max_tokens=512,
+                max_tokens=256,
             )
             raw_text = response.choices[0].message.content.strip()
             logger.debug("Groq reverse translation raw response:\n%s", raw_text)

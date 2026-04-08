@@ -491,6 +491,17 @@ async def text_router(update: Update, context: ContextTypes.DEFAULT_TYPE) -> Non
 
     section = get_section(user.id)
 
+    # CRITICAL: When in QUIZ mode, text messages are handled ONLY by quiz_answer_handler
+    # The quiz ConversationHandler is registered before text_router and will catch
+    # quiz answers. If we reach here during quiz mode, it means quiz is not active.
+    if section == Section.QUIZ:
+        # User thinks they're in quiz but no active quiz question
+        await update.message.reply_text(
+            t("quiz_no_active"),
+            parse_mode=ParseMode.HTML,
+        )
+        return
+
     if section == Section.WORDS:
         await _handle_words_section(update, context, text, t)
     elif section == Section.GRAMMAR:
@@ -539,6 +550,7 @@ async def quiz_mode_handler(update: Update, context: ContextTypes.DEFAULT_TYPE) 
     """Handle quiz mode selection — start quiz with chosen mode."""
     query = update.callback_query
     await query.answer()
+    user = update.effective_user
 
     try:
         mode = query.data.split(":")[1]
@@ -547,6 +559,9 @@ async def quiz_mode_handler(update: Update, context: ContextTypes.DEFAULT_TYPE) 
 
     if mode not in (MODE_CLASSIC, MODE_REVERSE, MODE_CHOICES):
         mode = MODE_CLASSIC
+
+    # CRITICAL: Set section to QUIZ to block translation handler
+    set_section(user.id, Section.QUIZ)
 
     context.user_data["quiz_mode"] = mode
     context.user_data["quiz_asked"] = set()
@@ -695,6 +710,8 @@ async def _send_quiz_question(update: Update, context: ContextTypes.DEFAULT_TYPE
             context.user_data.pop("quiz_word", None)
             context.user_data.pop("quiz_asked", None)
             context.user_data.pop("quiz_mode", None)
+            # CRITICAL: Clear QUIZ section to re-enable translation handler
+            clear_section(user.id)
             return ConversationHandler.END
 
         # Track this word as asked
@@ -751,10 +768,13 @@ async def _send_quiz_question(update: Update, context: ContextTypes.DEFAULT_TYPE
 
 async def quiz_cancel_handler(update: Update, context: ContextTypes.DEFAULT_TYPE) -> int:
     """Cancel the active quiz session."""
+    user = update.effective_user
     context.user_data.pop("quiz_word", None)
     context.user_data.pop("quiz_asked", None)
     context.user_data.pop("quiz_mode", None)
-    ui_lang = await _get_ui_lang(update.effective_user.id)
+    # CRITICAL: Clear QUIZ section to re-enable translation handler
+    clear_section(user.id)
+    ui_lang = await _get_ui_lang(user.id)
     t = get_translator(ui_lang)
     reply_func = (
         update.callback_query.message.reply_text
@@ -1134,7 +1154,13 @@ def register_handlers(application: Application) -> None:
     application.add_handler(CommandHandler("clear", clear_handler))
     application.add_handler(CommandHandler("ielts", ielts_handler))
 
+    # Quiz conversation handler — MUST be registered BEFORE text_router
+    # This ensures quiz answers are caught and not processed as translations
+    application.add_handler(quiz_conv)
+
     # Text router — routes messages to correct section based on user state
+    # CRITICAL: This handler MUST come AFTER quiz_conv to prevent quiz answers
+    # from being processed as word translations when user is in quiz mode
     application.add_handler(MessageHandler(filters.TEXT & ~filters.COMMAND, text_router))
 
     # Callback handlers
@@ -1149,9 +1175,6 @@ def register_handlers(application: Application) -> None:
     application.add_handler(CallbackQueryHandler(word_library_callback, pattern=f"^{WORD_LIBRARY}:"))
     application.add_handler(CallbackQueryHandler(word_delete_callback, pattern=f"^{WORD_DELETE}:"))
     application.add_handler(CallbackQueryHandler(word_more_callback, pattern=f"^{WORD_MORE}$"))
-
-    # Quiz conversation handler
-    application.add_handler(quiz_conv)
 
     # Error handler
     application.add_error_handler(error_handler)
