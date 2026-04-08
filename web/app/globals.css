@@ -1,0 +1,63 @@
+@tailwind base;
+@tailwind components;
+@tailwind utilities;
+
+@layer base {
+  :root {
+    --font-inter: 'Inter', system-ui, sans-serif;
+  }
+  
+  html {
+    scroll-behavior: smooth;
+  }
+  
+  body {
+    @apply bg-background text-white;
+  }
+}
+
+@layer components {
+  .gradient-text {
+    @apply bg-clip-text text-transparent bg-gradient-to-r from-primary via-accent-cyan to-accent-purple;
+  }
+  
+  .glass-card {
+    @apply bg-surface/80 backdrop-blur-xl border border-white/10 rounded-2xl;
+  }
+  
+  .glow-button {
+    @apply relative overflow-hidden transition-all duration-300;
+    box-shadow: 0 0 20px rgba(99, 102, 241, 0.3);
+  }
+  
+  .glow-button:hover {
+    box-shadow: 0 0 40px rgba(99, 102, 241, 0.5);
+  }
+  
+  .feature-card {
+    @apply glass-card p-6 hover:bg-surface-light/50 transition-all duration-300;
+  }
+  
+  .feature-card:hover {
+    @apply border-primary/30;
+    transform: translateY(-4px);
+  }
+}
+
+@layer utilities {
+  .text-balance {
+    text-wrap: balance;
+  }
+  
+  .animate-delay-100 {
+    animation-delay: 100ms;
+  }
+  
+  .animate-delay-200 {
+    animation-delay: 200ms;
+  }
+  
+  .animate-delay-300 {
+    animation-delay: 300ms;
+  }
+}
