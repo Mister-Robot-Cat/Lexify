@@ -3,8 +3,16 @@ import re
 
 from groq import AsyncGroq
 from pydantic import BaseModel, Field, ValidationError, field_validator
+from tenacity import (
+    retry,
+    retry_if_exception_type,
+    stop_after_attempt,
+    wait_exponential,
+    before_sleep_log,
+)
 
 from app.config import settings
+from app.services.cache_service import cache_service
 
 logger = logging.getLogger(__name__)
 
@@ -130,6 +138,13 @@ class GroqService:
         self._model = settings.groq_model
         logger.info("GroqService initialized with model: %s", self._model)
 
+    @retry(
+        stop=stop_after_attempt(3),
+        wait=wait_exponential(multiplier=1, min=2, max=10),
+        retry=retry_if_exception_type((ConnectionError, TimeoutError)),
+        before_sleep=before_sleep_log(logger, logging.WARNING),
+        reraise=True,
+    )
     async def explain_word(
         self,
         word: str,
@@ -150,6 +165,20 @@ class GroqService:
             ValueError: If the response cannot be parsed.
             Exception: On API communication errors.
         """
+        # Normalize word for cache key
+        cache_word = word.lower().strip()
+        cache_key_parts = (learning_language, language, cache_word)
+
+        # Try cache first
+        cached = await cache_service.get("word", *cache_key_parts)
+        if cached is not None:
+            logger.info("Cache HIT for word: %s (%s->%s)", word, language, learning_language)
+            try:
+                return WordExplanation.model_validate(cached)
+            except ValidationError as e:
+                logger.warning("Cached word data invalid for %s: %s", word, e)
+                # Continue to fetch fresh data
+
         prompt = PROMPT_TEMPLATE.format(
             word=word,
             native_language=language,
@@ -166,7 +195,17 @@ class GroqService:
             )
             raw_text = response.choices[0].message.content.strip()
             logger.debug("Groq raw response:\n%s", raw_text)
-            return self._parse_response(raw_text, word)
+            result = self._parse_response(raw_text, word)
+
+            # Cache the successful result
+            await cache_service.set(
+                "word",
+                *cache_key_parts,
+                value=result.model_dump()
+            )
+            logger.info("Cached word explanation: %s", word)
+
+            return result
         except Exception:
             logger.exception("Groq API call failed for word: %s", word)
             raise
@@ -241,6 +280,13 @@ class GroqService:
             )
             raise ValueError(f"Invalid response format: {e}") from e
 
+    @retry(
+        stop=stop_after_attempt(3),
+        wait=wait_exponential(multiplier=1, min=2, max=10),
+        retry=retry_if_exception_type((ConnectionError, TimeoutError)),
+        before_sleep=before_sleep_log(logger, logging.WARNING),
+        reraise=True,
+    )
     async def reverse_translate(
         self,
         word: str,

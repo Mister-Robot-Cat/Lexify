@@ -2,7 +2,7 @@ import logging
 import random as _random
 
 from telegram import Update
-from telegram.constants import ParseMode
+from telegram.constants import ChatAction, ParseMode
 from telegram.ext import (
     Application,
     CallbackQueryHandler,
@@ -333,7 +333,7 @@ async def section_callback(update: Update, context: ContextTypes.DEFAULT_TYPE) -
 
 # ─── Section handlers (each processes text for its own section) ──────────────
 
-async def _handle_words_section(update: Update, text: str, t) -> None:
+async def _handle_words_section(update: Update, context: ContextTypes.DEFAULT_TYPE, text: str, t) -> None:
     """Process text in the Word Lookup section."""
     user = update.effective_user
 
@@ -345,6 +345,12 @@ async def _handle_words_section(update: Update, text: str, t) -> None:
     await update.message.reply_text(t("word_looking_up"))
 
     try:
+        # Show typing indicator during API/database operations
+        await context.bot.send_chat_action(
+            chat_id=update.effective_chat.id,
+            action=ChatAction.TYPING
+        )
+
         async with async_session_factory() as session:
             result, is_new = await word_service.process_word(session, user.id, text)
             await session.commit()
@@ -379,13 +385,19 @@ async def _handle_words_section(update: Update, text: str, t) -> None:
         await update.message.reply_text(t("word_fatal"))
 
 
-async def _handle_grammar_section(update: Update, text: str, t) -> None:
+async def _handle_grammar_section(update: Update, context: ContextTypes.DEFAULT_TYPE, text: str, t) -> None:
     """Process text in the Grammar chatbot section."""
     user = update.effective_user
     logger.info("[GRAMMAR] user %d: %s", user.id, text[:80])
     await update.message.reply_text(t("ask_thinking"))
 
     try:
+        # Show typing indicator during AI processing
+        await context.bot.send_chat_action(
+            chat_id=update.effective_chat.id,
+            action=ChatAction.TYPING
+        )
+
         async with async_session_factory() as session:
             db_user = await word_service.get_or_create_user(session, user.id)
             native_lang = db_user.language
@@ -417,7 +429,7 @@ async def _handle_grammar_section(update: Update, text: str, t) -> None:
         await update.message.reply_text(t("ask_fatal"))
 
 
-async def _handle_ielts_section(update: Update, text: str, t) -> None:
+async def _handle_ielts_section(update: Update, context: ContextTypes.DEFAULT_TYPE, text: str, t) -> None:
     """Process text in the IELTS Writing section."""
     user = update.effective_user
 
@@ -429,6 +441,12 @@ async def _handle_ielts_section(update: Update, text: str, t) -> None:
     await update.message.reply_text(t("ielts_evaluating"))
 
     try:
+        # Show typing indicator during evaluation (can take 5-10 seconds)
+        await context.bot.send_chat_action(
+            chat_id=update.effective_chat.id,
+            action=ChatAction.TYPING
+        )
+
         evaluation = await ielts_service.evaluate_writing(text)
 
         def _crit(emoji, name, crit):
@@ -474,11 +492,11 @@ async def text_router(update: Update, context: ContextTypes.DEFAULT_TYPE) -> Non
     section = get_section(user.id)
 
     if section == Section.WORDS:
-        await _handle_words_section(update, text, t)
+        await _handle_words_section(update, context, text, t)
     elif section == Section.GRAMMAR:
-        await _handle_grammar_section(update, text, t)
+        await _handle_grammar_section(update, context, text, t)
     elif section == Section.IELTS:
-        await _handle_ielts_section(update, text, t)
+        await _handle_ielts_section(update, context, text, t)
     else:
         # No section selected — prompt user to choose
         await update.message.reply_text(

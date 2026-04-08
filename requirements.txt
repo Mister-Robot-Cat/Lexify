@@ -9,3 +9,5 @@ groq==0.25.0
 pydantic==2.10.4
 pydantic-settings==2.7.1
 python-dotenv==1.0.1
+redis==5.0.1
+tenacity==8.2.3

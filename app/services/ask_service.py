@@ -2,6 +2,13 @@ import logging
 
 from groq import AsyncGroq
 from pydantic import BaseModel, Field, ValidationError
+from tenacity import (
+    retry,
+    retry_if_exception_type,
+    stop_after_attempt,
+    wait_exponential,
+    before_sleep_log,
+)
 
 from app.config import settings
 
@@ -59,6 +66,13 @@ class AskService:
         self._model = settings.groq_model
         logger.info("AskService (chatbot) initialized with model: %s", self._model)
 
+    @retry(
+        stop=stop_after_attempt(3),
+        wait=wait_exponential(multiplier=1, min=2, max=10),
+        retry=retry_if_exception_type((ConnectionError, TimeoutError)),
+        before_sleep=before_sleep_log(logger, logging.WARNING),
+        reraise=True,
+    )
     async def chat(
         self,
         user_message: str,

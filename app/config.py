@@ -18,6 +18,16 @@ class Settings(BaseSettings):
     groq_api_key: str = Field(..., description="Groq API key")
     groq_model: str = Field("llama-3.3-70b-versatile", description="Groq model name")
 
+    # Redis / Caching
+    redis_url: str = Field(
+        "redis://localhost:6379/0",
+        description="Redis connection string for caching"
+    )
+    cache_ttl_seconds: int = Field(
+        86400,
+        description="Cache TTL in seconds (default 24 hours)"
+    )
+
     # App
     log_level: str = Field("INFO", description="Logging level")
     bot_mode: str = Field("polling", description="Bot mode: 'polling' or 'webhook'")

@@ -80,7 +80,7 @@ class UserWord(Base):
     correct_count: Mapped[int] = mapped_column(Integer, default=0, nullable=False)
     wrong_count: Mapped[int] = mapped_column(Integer, default=0, nullable=False)
     next_review: Mapped[datetime.datetime] = mapped_column(
-        DateTime, server_default=func.now(), nullable=False
+        DateTime, server_default=func.now(), nullable=False, index=True
     )
     created_at: Mapped[datetime.datetime] = mapped_column(
         DateTime, server_default=func.now(), nullable=False

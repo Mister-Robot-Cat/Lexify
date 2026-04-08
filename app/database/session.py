@@ -10,9 +10,10 @@ logger = logging.getLogger(__name__)
 engine = create_async_engine(
     settings.database_url,
     echo=False,
-    pool_size=10,
-    max_overflow=20,
+    pool_size=20,
+    max_overflow=40,
     pool_pre_ping=True,
+    pool_recycle=3600,
     connect_args={"charset": "utf8mb4"},
 )
 
