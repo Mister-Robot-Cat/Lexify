@@ -395,18 +395,19 @@ async def _handle_grammar_section(update: Update, text: str, t) -> None:
         history = get_chat_history(user.id)
 
         # Send to chatbot with full history
-        reply = await ask_service.chat(
+        chat_response = await ask_service.chat(
             user_message=text,
             chat_history=history,
             native_language=native_lang,
             learning_language=learning_lang,
         )
+        reply_text = chat_response.content
 
         # Save both messages to history
         append_chat_message(user.id, "user", text)
-        append_chat_message(user.id, "assistant", reply)
+        append_chat_message(user.id, "assistant", reply_text)
 
-        await update.message.reply_text(reply)
+        await update.message.reply_text(reply_text)
 
     except ValueError as e:
         logger.warning("Grammar chat error: %s", e)

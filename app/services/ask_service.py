@@ -1,6 +1,7 @@
 import logging
 
 from groq import AsyncGroq
+from pydantic import BaseModel, Field, ValidationError
 
 from app.config import settings
 
@@ -40,6 +41,16 @@ MANDATORY: Detect the language of the user's message. Respond in that EXACT lang
 </edge_cases>"""
 
 
+class ChatResponse(BaseModel):
+    """Validated chat response from the AI tutor."""
+
+    content: str = Field(
+        min_length=1,
+        max_length=4000,
+        description="The chat response content"
+    )
+
+
 class AskService:
     """Chatbot service for grammar and language questions using Groq AI."""
 
@@ -54,7 +65,7 @@ class AskService:
         chat_history: list[dict[str, str]],
         native_language: str = "Russian",
         learning_language: str = "English",
-    ) -> str:
+    ) -> ChatResponse:
         """Send a message in the context of a conversation.
 
         Args:
@@ -64,10 +75,10 @@ class AskService:
             learning_language: Language user is learning.
 
         Returns:
-            The assistant's reply as a string.
+            ChatResponse with validated content.
 
         Raises:
-            ValueError: On API errors or empty responses.
+            ValueError: On API errors, empty responses, or validation failures.
         """
         if len(user_message.strip()) < 2:
             raise ValueError("Message too short")
@@ -91,16 +102,19 @@ class AskService:
                 temperature=0.7,
                 max_tokens=1024,
             )
-            reply = response.choices[0].message.content.strip()
-            logger.debug("Grammar chat reply length: %d", len(reply))
+            raw_reply = response.choices[0].message.content.strip()
+            logger.debug("Grammar chat raw reply length: %d", len(raw_reply))
 
-            if not reply:
-                raise ValueError("Empty response from chatbot API")
+            # Validate response with Pydantic
+            validated = ChatResponse.model_validate({"content": raw_reply})
+            return validated
 
-            return reply
+        except ValidationError as e:
+            logger.error("Chat response validation failed: %s", e)
+            raise ValueError(f"Invalid response format: {e}") from e
         except Exception as e:
             logger.exception("Grammar chatbot API call failed: %s", str(e))
-            raise ValueError(f"Failed to get response: {str(e)}")
+            raise ValueError(f"Failed to get response: {str(e)}") from e
 
 
 # Module-level singleton

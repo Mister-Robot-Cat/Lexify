@@ -1,8 +1,8 @@
 import logging
 import re
-from dataclasses import dataclass
 
 from groq import AsyncGroq
+from pydantic import BaseModel, Field, ValidationError, field_validator
 
 from app.config import settings
 
@@ -87,28 +87,39 @@ Context: <usage guidance in {native_language}, numbered to match Translations>
 </edge_cases>"""
 
 
-@dataclass(frozen=True)
-class WordExplanation:
+class WordExplanation(BaseModel):
     """Structured result from AI word explanation."""
 
-    word: str
-    translation: str
-    meaning: str
-    example: str
-    simple_explanation: str
-    level: str
-    synonyms: str
+    model_config = {"frozen": True}
+
+    word: str = Field(description="The correctly spelled word")
+    translation: str = Field(min_length=1, description="Translation in native language")
+    meaning: str = Field(min_length=1, description="Definition in learning language")
+    example: str = Field(min_length=1, description="Example sentence")
+    simple_explanation: str = Field(min_length=1, description="Simplified explanation")
+    level: str = Field(default="N/A", description="CEFR level")
+    synonyms: str = Field(default="", description="Comma-separated synonyms")
+
+    @field_validator("level")
+    @classmethod
+    def validate_cefr_level(cls, v: str) -> str:
+        valid_levels = ["A1", "A2", "B1", "B2", "C1", "C2", "N/A"]
+        upper_v = v.upper()
+        if upper_v not in valid_levels:
+            return "N/A"
+        return upper_v
 
 
-@dataclass(frozen=True)
-class ReverseTranslation:
+class ReverseTranslation(BaseModel):
     """Structured result for reverse translation (native -> learning language)."""
 
-    word: str
-    translations: str
-    meanings: str
-    examples: str
-    context: str
+    model_config = {"frozen": True}
+
+    word: str = Field(description="Original word in native language")
+    translations: str = Field(min_length=1, description="Translations in learning language")
+    meanings: str = Field(min_length=1, description="Explanations in learning language")
+    examples: str = Field(min_length=1, description="Example sentences")
+    context: str = Field(min_length=1, description="Usage guidance in native language")
 
 
 class GroqService:
@@ -196,26 +207,39 @@ class GroqService:
                 if value:
                     parsed[key] = value
 
-        # Validate that essential fields are present
-        missing = [k for k in ("translation", "meaning", "example", "simple_explanation") if k not in parsed]
+        # Build data dict for Pydantic validation
+        data = {
+            "word": parsed.get("word", original_word),
+            "translation": parsed.get("translation", ""),
+            "meaning": parsed.get("meaning", ""),
+            "example": parsed.get("example", ""),
+            "simple_explanation": parsed.get("simple_explanation", ""),
+            "level": parsed.get("level", "N/A"),
+            "synonyms": parsed.get("synonyms", ""),
+        }
+
+        # Validate essential fields are present
+        required = ["translation", "meaning", "example", "simple_explanation"]
+        missing = [k for k in required if not data.get(k)]
         if missing:
             logger.warning(
-                "Groq response missing fields %s for word '%s'. Raw:\n%s",
+                "Groq response missing required fields %s for word '%s'. Raw:\n%s",
                 missing,
                 original_word,
                 text,
             )
             raise ValueError(f"Could not parse Groq response. Missing fields: {missing}")
 
-        return WordExplanation(
-            word=parsed.get("word", original_word),
-            translation=parsed["translation"],
-            meaning=parsed["meaning"],
-            example=parsed["example"],
-            simple_explanation=parsed["simple_explanation"],
-            level=parsed.get("level", "N/A"),
-            synonyms=parsed.get("synonyms", ""),
-        )
+        try:
+            return WordExplanation.model_validate(data)
+        except ValidationError as e:
+            logger.error(
+                "Pydantic validation failed for word '%s': %s. Data: %s",
+                original_word,
+                e,
+                data,
+            )
+            raise ValueError(f"Invalid response format: {e}") from e
 
     async def reverse_translate(
         self,
@@ -284,24 +308,37 @@ class GroqService:
                 if value:
                     parsed[key] = value
 
+        # Build data dict for Pydantic validation
+        data = {
+            "word": parsed.get("word", original_word),
+            "translations": parsed.get("translations", ""),
+            "meanings": parsed.get("meanings", ""),
+            "examples": parsed.get("examples", ""),
+            "context": parsed.get("context", ""),
+        }
+
         # Validate essential fields
-        missing = [k for k in ("translations", "meanings", "examples", "context") if k not in parsed]
+        required = ["translations", "meanings", "examples", "context"]
+        missing = [k for k in required if not data.get(k)]
         if missing:
             logger.warning(
-                "Groq reverse response missing fields %s for word '%s'. Raw:\n%s",
+                "Groq reverse response missing required fields %s for word '%s'. Raw:\n%s",
                 missing,
                 original_word,
                 text,
             )
             raise ValueError(f"Could not parse reverse translation response. Missing fields: {missing}")
 
-        return ReverseTranslation(
-            word=parsed.get("word", original_word),
-            translations=parsed["translations"],
-            meanings=parsed["meanings"],
-            examples=parsed["examples"],
-            context=parsed["context"],
-        )
+        try:
+            return ReverseTranslation.model_validate(data)
+        except ValidationError as e:
+            logger.error(
+                "Pydantic validation failed for reverse translation '%s': %s. Data: %s",
+                original_word,
+                e,
+                data,
+            )
+            raise ValueError(f"Invalid response format: {e}") from e
 
 
 # Module-level singleton
