@@ -11,6 +11,10 @@ SET_UI = "set_ui"
 SET_LEARN = "set_learn"
 TOPIC_SELECT = "topic"
 SECTION_SELECT = "section"
+WORD_QUIZ = "word_quiz"
+WORD_LIBRARY = "word_library"
+WORD_DELETE = "word_delete"
+WORD_MORE = "word_more"
 
 # Quiz modes
 MODE_CLASSIC = "classic"        # EN word → type translation
@@ -183,5 +187,23 @@ def section_menu_keyboard() -> InlineKeyboardMarkup:
         [
             InlineKeyboardButton("📝 IELTS Writing", callback_data=f"{SECTION_SELECT}:ielts"),
             InlineKeyboardButton("🎯 Quiz", callback_data=f"{SECTION_SELECT}:quiz"),
+        ],
+    ])
+
+
+def word_actions_keyboard(word_id: int) -> InlineKeyboardMarkup:
+    """Inline keyboard with quick actions after adding a word.
+
+    Args:
+        word_id: The database ID of the word for delete action.
+    """
+    return InlineKeyboardMarkup([
+        [
+            InlineKeyboardButton("🎯 Квиз", callback_data=f"{WORD_QUIZ}:{word_id}"),
+            InlineKeyboardButton("📚 Библиотека", callback_data=f"{WORD_LIBRARY}:{word_id}"),
+        ],
+        [
+            InlineKeyboardButton("🗑️ Удалить", callback_data=f"{WORD_DELETE}:{word_id}"),
+            InlineKeyboardButton("➕ Ещё слово", callback_data=WORD_MORE),
         ],
     ])

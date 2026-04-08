@@ -12,6 +12,7 @@ from telegram.ext import (
     MessageHandler,
     filters,
 )
+from sqlalchemy import select, delete
 
 from app.bot.i18n_simple import get_translator, UI_LANGUAGES
 from app.bot.keyboards import (
@@ -30,6 +31,10 @@ from app.bot.keyboards import (
     SET_LEARN,
     SET_UI,
     TOPIC_SELECT,
+    WORD_DELETE,
+    WORD_LIBRARY,
+    WORD_MORE,
+    WORD_QUIZ,
     language_keyboard,
     learning_language_keyboard,
     library_pagination_keyboard,
@@ -40,6 +45,7 @@ from app.bot.keyboards import (
     section_menu_keyboard,
     topics_keyboard,
     ui_language_keyboard,
+    word_actions_keyboard,
 )
 from app.bot.topics import TOPIC_KEYS, TOPIC_PACKS
 from app.bot.user_state import (
@@ -72,7 +78,7 @@ def _h(text: str) -> str:
     return text.replace("&", "&amp;").replace("<", "&lt;").replace(">", "&gt;")
 
 
-def _format_word_html(word) -> str:
+def _format_word_html(word, show_synonyms: bool = True) -> str:
     """Format a Word model into a Telegram HTML message."""
     parts = [
         f"📖 <b>{_h(word.word)}</b>  [{_h(word.level)}]\n",
@@ -81,8 +87,13 @@ def _format_word_html(word) -> str:
         f"💬 <b>Example:</b> <i>{_h(word.example)}</i>",
         f"💡 <b>Simple Explanation:</b> {_h(word.simple_explanation)}",
     ]
-    if word.synonyms:
-        parts.append(f"🔗 <b>Synonyms:</b> {_h(word.synonyms)}")
+    if show_synonyms and word.synonyms:
+        # Format synonyms nicely - split by comma and show first 3
+        synonyms_list = [s.strip() for s in word.synonyms.split(",") if s.strip()]
+        if synonyms_list:
+            top_synonyms = synonyms_list[:3]
+            synonyms_text = ", ".join(f"<code>{_h(s)}</code>" for s in top_synonyms)
+            parts.append(f"\n🔗 <b>Synonyms:</b> {synonyms_text}")
     return "\n".join(parts)
 
 
@@ -354,7 +365,11 @@ async def _handle_words_section(update: Update, text: str, t) -> None:
                 corrected = f"✏️ <b>Auto-corrected:</b> <s>{_h(text)}</s> → <b>{_h(result.word)}</b>\n\n"
 
             message = f"{corrected}{_format_word_html(result)}\n\n{status}"
-            await update.message.reply_text(message, parse_mode=ParseMode.HTML)
+            await update.message.reply_text(
+                message,
+                parse_mode=ParseMode.HTML,
+                reply_markup=word_actions_keyboard(result.id),
+            )
 
     except ValueError as e:
         logger.warning("Failed to process word '%s': %s", text, e)
@@ -906,6 +921,157 @@ async def ielts_handler(update: Update, context: ContextTypes.DEFAULT_TYPE) -> N
     await update.message.reply_text(t("section_ielts_active"), parse_mode=ParseMode.HTML)
 
 
+# ─── Word action callbacks ───────────────────────────────────────────────────
+
+async def word_quiz_callback(update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
+    """Handle 'Quiz' button click from word actions keyboard."""
+    query = update.callback_query
+    await query.answer()
+
+    user = update.effective_user
+    ui_lang = await _get_ui_lang(user.id)
+    t = get_translator(ui_lang)
+
+    # Start quiz with the word included
+    try:
+        word_id = int(query.data.split(":")[1])
+        context.user_data["quiz_mode"] = MODE_CLASSIC
+        context.user_data["quiz_asked"] = {word_id}
+
+        # Send quiz mode selection or directly start quiz
+        await _send_quiz_question_from_callback(update, context, query.message.reply_text)
+    except (IndexError, ValueError):
+        await query.message.reply_text(t("quiz_no_words"))
+
+
+async def _send_quiz_question_from_callback(update: Update, context: ContextTypes.DEFAULT_TYPE, reply_func) -> int:
+    """Send next quiz question from callback context."""
+    user = update.effective_user
+    ui_lang = await _get_ui_lang(user.id)
+    t = get_translator(ui_lang)
+    asked: set[int] = context.user_data.get("quiz_asked", set())
+    mode = context.user_data.get("quiz_mode", MODE_CLASSIC)
+
+    async with async_session_factory() as session:
+        word = await quiz_service.get_word_for_quiz(session, user.id, exclude_word_ids=asked)
+
+        if word is None:
+            await session.commit()
+            msg = t("quiz_finished") if asked else t("quiz_no_words")
+            await reply_func(msg)
+            context.user_data.pop("quiz_word", None)
+            context.user_data.pop("quiz_asked", None)
+            context.user_data.pop("quiz_mode", None)
+            return ConversationHandler.END
+
+        asked.add(word.id)
+        context.user_data["quiz_asked"] = asked
+
+        short_translation = word.translation.split("\n")[0].strip()
+        if len(short_translation) > 3 and short_translation[0].isdigit() and short_translation[1] == ".":
+            short_translation = short_translation[2:].strip()
+
+        quiz_data = {
+            "word_id": word.id,
+            "word": word.word,
+            "translation": short_translation,
+            "meaning": word.meaning,
+            "simple_explanation": word.simple_explanation,
+        }
+
+        if mode == MODE_REVERSE:
+            text = t("quiz_reverse_q", translation=_h(short_translation))
+            keyboard = quiz_action_keyboard()
+        elif mode == MODE_CHOICES:
+            wrong_options = await quiz_service.get_choice_options(session, user.id, word, count=3)
+            options = [short_translation] + wrong_options
+            _random.shuffle(options)
+            correct_index = options.index(short_translation)
+            quiz_data["correct_index"] = correct_index
+            text = t("quiz_choices_q", word=_h(word.word))
+            keyboard = quiz_choices_keyboard(options, correct_index)
+        else:
+            text = t("quiz_classic_q", word=_h(word.word))
+            keyboard = quiz_action_keyboard()
+
+        await session.commit()
+
+    context.user_data["quiz_word"] = quiz_data
+
+    await reply_func(text, parse_mode=ParseMode.HTML, reply_markup=keyboard)
+    return AWAITING_ANSWER
+
+
+async def word_library_callback(update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
+    """Handle 'Library' button click from word actions keyboard."""
+    query = update.callback_query
+    await query.answer()
+
+    user = update.effective_user
+    ui_lang = await _get_ui_lang(user.id)
+    await _send_library_page(query.message, user.id, page=0, edit=True, ui_lang=ui_lang)
+
+
+async def word_delete_callback(update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
+    """Handle 'Delete' button click from word actions keyboard."""
+    query = update.callback_query
+    await query.answer()
+
+    user = update.effective_user
+    ui_lang = await _get_ui_lang(user.id)
+    t = get_translator(ui_lang)
+
+    try:
+        word_id = int(query.data.split(":")[1])
+
+        async with async_session_factory() as session:
+            # Get the word text first for confirmation message
+            from app.database.models import Word, UserWord, User
+            word_result = await session.execute(select(Word).where(Word.id == word_id))
+            word = word_result.scalar_one_or_none()
+
+            if word:
+                # Get user id from telegram_id
+                user_result = await session.execute(select(User).where(User.telegram_id == user.id))
+                db_user = user_result.scalar_one_or_none()
+
+                if db_user:
+                    # Delete the user_word link
+                    await session.execute(
+                        delete(UserWord).where(
+                            UserWord.user_id == db_user.id,
+                            UserWord.word_id == word_id
+                        )
+                    )
+                    await session.commit()
+                    await query.edit_message_text(
+                        t("delete_ok", word=word.word),
+                        parse_mode=ParseMode.HTML
+                    )
+                else:
+                    await query.edit_message_text(t("delete_not_found", word=""))
+            else:
+                await query.edit_message_text(t("delete_not_found", word=""))
+    except Exception as e:
+        logger.exception("Failed to delete word from callback")
+        await query.message.reply_text(t("delete_error"))
+
+
+async def word_more_callback(update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
+    """Handle 'More' button click — prompt to enter another word."""
+    query = update.callback_query
+    await query.answer()
+
+    user = update.effective_user
+    ui_lang = await _get_ui_lang(user.id)
+    t = get_translator(ui_lang)
+
+    await query.edit_message_text(
+        f"{t('word_prompt_more')}\n\n{t('no_section')}",
+        reply_markup=section_menu_keyboard(),
+    )
+
+
 # ─── Error handler ────────────────────────────────────────────────────────────
 
 async def error_handler(update: object, context: ContextTypes.DEFAULT_TYPE) -> None:
@@ -958,6 +1124,12 @@ def register_handlers(application: Application) -> None:
     application.add_handler(CallbackQueryHandler(ui_callback, pattern=f"^{SET_UI}:"))
     application.add_handler(CallbackQueryHandler(learning_callback, pattern=f"^{SET_LEARN}:"))
     application.add_handler(CallbackQueryHandler(topics_callback, pattern=f"^{TOPIC_SELECT}:"))
+
+    # Word action callbacks
+    application.add_handler(CallbackQueryHandler(word_quiz_callback, pattern=f"^{WORD_QUIZ}:"))
+    application.add_handler(CallbackQueryHandler(word_library_callback, pattern=f"^{WORD_LIBRARY}:"))
+    application.add_handler(CallbackQueryHandler(word_delete_callback, pattern=f"^{WORD_DELETE}:"))
+    application.add_handler(CallbackQueryHandler(word_more_callback, pattern=f"^{WORD_MORE}$"))
 
     # Quiz conversation handler
     application.add_handler(quiz_conv)
