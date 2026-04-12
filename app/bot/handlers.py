@@ -326,7 +326,7 @@ async def section_callback(update: Update, context: ContextTypes.DEFAULT_TYPE) -
         set_section(user.id, Section.IELTS)
         await query.edit_message_text(t("section_ielts_active"), parse_mode=ParseMode.HTML)
     elif chosen == "quiz":
-        set_section(user.id, Section.NONE)  # Quiz uses ConversationHandler
+        set_section(user.id, Section.QUIZ)  # Quiz section blocks translation handler
         await _quiz_mode_menu(user.id, query.message.reply_text)
     else:
         await query.edit_message_text(t("no_section"), reply_markup=section_menu_keyboard())
@@ -491,6 +491,12 @@ async def text_router(update: Update, context: ContextTypes.DEFAULT_TYPE) -> Non
 
     section = get_section(user.id)
 
+    # CRITICAL: Check if user has an active quiz question (started via word card)
+    # This handles quiz flows outside of ConversationHandler (e.g., word_quiz_callback)
+    if context.user_data.get("quiz_word"):
+        # Route to quiz answer handler
+        return await quiz_answer_handler(update, context)
+
     # CRITICAL: When in QUIZ mode, text messages are handled ONLY by quiz_answer_handler
     # The quiz ConversationHandler is registered before text_router and will catch
     # quiz answers. If we reach here during quiz mode, it means quiz is not active.
@@ -536,6 +542,7 @@ async def _quiz_mode_menu(user_id: int, reply_func) -> int:
 
 async def quiz_command_handler(update: Update, context: ContextTypes.DEFAULT_TYPE) -> int:
     """Handle /quiz command — show mode selection."""
+    set_section(update.effective_user.id, Section.QUIZ)
     return await _quiz_mode_menu(update.effective_user.id, update.message.reply_text)
 
 
@@ -543,6 +550,7 @@ async def quiz_start_from_menu(update: Update, context: ContextTypes.DEFAULT_TYP
     """Handle the 'Quiz' button from main menu — show mode selection."""
     query = update.callback_query
     await query.answer()
+    set_section(update.effective_user.id, Section.QUIZ)
     return await _quiz_mode_menu(update.effective_user.id, query.message.reply_text)
 
 
@@ -977,6 +985,8 @@ async def word_quiz_callback(update: Update, context: ContextTypes.DEFAULT_TYPE)
     # Start quiz with the word included
     try:
         word_id = int(query.data.split(":")[1])
+        # CRITICAL: Set QUIZ section to block translation handler
+        set_section(user.id, Section.QUIZ)
         context.user_data["quiz_mode"] = MODE_CLASSIC
         context.user_data["quiz_asked"] = {word_id}
 
@@ -1004,14 +1014,18 @@ async def _send_quiz_question_from_callback(update: Update, context: ContextType
             context.user_data.pop("quiz_word", None)
             context.user_data.pop("quiz_asked", None)
             context.user_data.pop("quiz_mode", None)
+            # CRITICAL: Clear QUIZ section to re-enable translation handler
+            clear_section(user.id)
             return ConversationHandler.END
 
         asked.add(word.id)
         context.user_data["quiz_asked"] = asked
 
-        short_translation = word.translation.split("\n")[0].strip()
-        if len(short_translation) > 3 and short_translation[0].isdigit() and short_translation[1] == ".":
-            short_translation = short_translation[2:].strip()
+        # Get first translation variant (same logic as _send_quiz_question)
+        raw_translation = word.translation.strip()
+        parts = _re.split(r'(?<!\d)\d+\.\s+', raw_translation)
+        parts = [p.strip() for p in parts if p.strip()]
+        short_translation = parts[0] if parts else raw_translation
 
         quiz_data = {
             "word_id": word.id,
