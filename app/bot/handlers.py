@@ -1,5 +1,6 @@
 import logging
 import random as _random
+import re as _re
 
 from telegram import Update
 from telegram.constants import ChatAction, ParseMode
@@ -342,10 +343,9 @@ async def _handle_words_section(update: Update, context: ContextTypes.DEFAULT_TY
         return
 
     logger.info("[WORDS] user %d: '%s'", user.id, text)
-    await update.message.reply_text(t("word_looking_up"))
 
     try:
-        # Show typing indicator during API/database operations
+        # Show typing indicator immediately (no "looking up" message for cleaner UX)
         await context.bot.send_chat_action(
             chat_id=update.effective_chat.id,
             action=ChatAction.TYPING
@@ -718,10 +718,13 @@ async def _send_quiz_question(update: Update, context: ContextTypes.DEFAULT_TYPE
         asked.add(word.id)
         context.user_data["quiz_asked"] = asked
 
-        # Get first translation line (short form for buttons/display)
-        short_translation = word.translation.split("\n")[0].strip()
-        if len(short_translation) > 3 and short_translation[0].isdigit() and short_translation[1] == ".":
-            short_translation = short_translation[2:].strip()
+        # Get first translation variant (short form for answer checking/display)
+        # Handles formats: "обычный", "1. обычный\n2. повседневный", "1. обычный 2. повседневный"
+        raw_translation = word.translation.strip()
+        # Split on numbered list markers like "1." "2." etc. (with or without newline before)
+        parts = _re.split(r'(?<!\d)\d+\.\s+', raw_translation)
+        parts = [p.strip() for p in parts if p.strip()]
+        short_translation = parts[0] if parts else raw_translation
 
         # Store current quiz word in user context
         quiz_data = {

@@ -1,6 +1,7 @@
 import datetime
 import logging
 import random
+import re
 from dataclasses import dataclass
 from difflib import SequenceMatcher
 
@@ -148,16 +149,31 @@ class QuizService:
 
         Uses both exact (case-insensitive) matching and fuzzy matching
         via SequenceMatcher to allow minor typos.
+        Accepts any variant from numbered lists (1. foo 2. bar) or comma-separated.
         """
         user_clean = user_answer.strip().lower()
-        correct_clean = correct_translation.strip().lower()
 
-        # Exact match
-        if user_clean == correct_clean:
-            return True
+        # Extract all variants from translation:
+        # Split on numbered markers "1. " "2. " etc. AND on commas
+        raw_parts = re.split(r'(?<!\d)\d+\.\s+', correct_translation.strip())
+        raw_parts = [p.strip() for p in raw_parts if p.strip()]
 
-        # Check if user answer matches any comma-separated variant
-        variants = [v.strip().lower() for v in correct_clean.split(",")]
+        # Also split each part by comma for additional variants
+        all_variants: list[str] = []
+        for part in raw_parts:
+            for sub in part.split(","):
+                sub = sub.strip().lower()
+                if sub:
+                    all_variants.append(sub)
+
+        # Deduplicate while preserving order
+        seen: set[str] = set()
+        variants: list[str] = []
+        for v in all_variants:
+            if v not in seen:
+                seen.add(v)
+                variants.append(v)
+
         for variant in variants:
             if user_clean == variant:
                 return True
