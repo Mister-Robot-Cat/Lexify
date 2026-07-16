@@ -53,11 +53,12 @@ from app.bot.user_state import (
     Section, get_section, set_section, clear_section,
     get_chat_history, append_chat_message, clear_chat_history,
 )
+from app.database.models import Word
 from app.database.session import async_session_factory
 from app.services.groq_service import WordExplanation, ReverseTranslation
 from app.services.ask_service import ask_service
 from app.services.ielts_service import ielts_service
-from app.services.quiz_service import quiz_service
+from app.services.quiz_service import quiz_service, QUIZ_BATCH_SIZE
 from app.services.word_service import word_service
 
 logger = logging.getLogger(__name__)
@@ -77,6 +78,16 @@ async def _get_ui_lang(telegram_id: int) -> str:
 def _h(text: str) -> str:
     """Escape HTML special characters for Telegram HTML parse mode."""
     return text.replace("&", "&amp;").replace("<", "&lt;").replace(">", "&gt;")
+
+
+def _short_translation(raw: str) -> str:
+    """Extract first translation variant from raw translation string.
+
+    Handles: "обычный", "1. обычный\\n2. повседневный", "1. обычный 2. повседневный"
+    """
+    parts = _re.split(r'(?<!\d)\d+\.\s+', raw.strip())
+    parts = [p.strip() for p in parts if p.strip()]
+    return parts[0] if parts else raw.strip()
 
 
 def _format_word_html(word, show_synonyms: bool = True) -> str:
@@ -555,7 +566,7 @@ async def quiz_start_from_menu(update: Update, context: ContextTypes.DEFAULT_TYP
 
 
 async def quiz_mode_handler(update: Update, context: ContextTypes.DEFAULT_TYPE) -> int:
-    """Handle quiz mode selection — start quiz with chosen mode."""
+    """Handle quiz mode selection — load a batch and start quiz."""
     query = update.callback_query
     await query.answer()
     user = update.effective_user
@@ -571,17 +582,49 @@ async def quiz_mode_handler(update: Update, context: ContextTypes.DEFAULT_TYPE) 
     # CRITICAL: Set section to QUIZ to block translation handler
     set_section(user.id, Section.QUIZ)
 
+    ui_lang = await _get_ui_lang(user.id)
+    t = get_translator(ui_lang)
+
+    # Load batch of words
+    async with async_session_factory() as session:
+        words = await quiz_service.get_batch_for_quiz(session, user.id)
+
+    if not words:
+        clear_section(user.id)
+        await query.message.reply_text(t("quiz_no_words"))
+        return ConversationHandler.END
+
+    # Build batch data: list of {word_id, word, translation, meaning, simple_explanation}
+    batch = []
+    for w in words:
+        batch.append({
+            "word_id": w.id,
+            "word": w.word,
+            "translation": _short_translation(w.translation),
+            "meaning": w.meaning,
+            "simple_explanation": w.simple_explanation,
+        })
+
     context.user_data["quiz_mode"] = mode
-    context.user_data["quiz_asked"] = set()
-    return await _send_quiz_question(update, context)
+    context.user_data["quiz_batch"] = batch
+    context.user_data["quiz_index"] = 0
+    context.user_data["quiz_mistakes"] = []
+
+    reply_func = query.message.reply_text
+    await reply_func(
+        t("quiz_batch_start", count=str(len(batch))),
+        parse_mode=ParseMode.HTML,
+    )
+    return await _send_batch_question(update, context)
 
 
 async def quiz_skip_handler(update: Update, context: ContextTypes.DEFAULT_TYPE) -> int:
-    """Handle the 'Skip' inline button during a quiz."""
+    """Handle the 'Skip' inline button during a quiz — counts as a mistake."""
     query = update.callback_query
     await query.answer()
 
-    ui_lang = await _get_ui_lang(update.effective_user.id)
+    user = update.effective_user
+    ui_lang = await _get_ui_lang(user.id)
     t = get_translator(ui_lang)
     word_data = context.user_data.get("quiz_word")
     mode = context.user_data.get("quiz_mode", MODE_CLASSIC)
@@ -595,8 +638,18 @@ async def quiz_skip_handler(update: Update, context: ContextTypes.DEFAULT_TYPE) 
             t("quiz_skipped", answer=_h(answer)),
             parse_mode=ParseMode.HTML,
         )
+        # Record skip as wrong answer in DB
+        async with async_session_factory() as session:
+            await quiz_service.record_answer(session, user.id, word_data["word_id"], False)
+            await session.commit()
+        # Add to mistakes
+        mistakes = context.user_data.get("quiz_mistakes", [])
+        mistakes.append(word_data["word_id"])
+        context.user_data["quiz_mistakes"] = mistakes
 
-    return await _send_quiz_question(update, context)
+    # Advance to next word
+    context.user_data["quiz_index"] = context.user_data.get("quiz_index", 0) + 1
+    return await _handle_batch_progress(update, context)
 
 
 async def quiz_choice_handler(update: Update, context: ContextTypes.DEFAULT_TYPE) -> int:
@@ -638,9 +691,16 @@ async def quiz_choice_handler(update: Update, context: ContextTypes.DEFAULT_TYPE
             f"📖 <b>{_h(word_data['word'])}</b>\n"
             f"💡 {_h(word_data['simple_explanation'])}"
         )
+        # Track mistake
+        mistakes = context.user_data.get("quiz_mistakes", [])
+        mistakes.append(word_data["word_id"])
+        context.user_data["quiz_mistakes"] = mistakes
 
     await query.edit_message_text(text, parse_mode=ParseMode.HTML)
-    return await _send_quiz_question(update, context)
+
+    # Advance to next word
+    context.user_data["quiz_index"] = context.user_data.get("quiz_index", 0) + 1
+    return await _handle_batch_progress(update, context)
 
 
 async def quiz_answer_handler(update: Update, context: ContextTypes.DEFAULT_TYPE) -> int:
@@ -685,16 +745,23 @@ async def quiz_answer_handler(update: Update, context: ContextTypes.DEFAULT_TYPE
             f"📖 <b>{_h(word_data['word'])}</b>\n"
             f"💡 {_h(word_data['simple_explanation'])}"
         )
+        # Track mistake
+        mistakes = context.user_data.get("quiz_mistakes", [])
+        mistakes.append(word_data["word_id"])
+        context.user_data["quiz_mistakes"] = mistakes
 
     await update.message.reply_text(text, parse_mode=ParseMode.HTML)
-    return await _send_quiz_question(update, context)
+
+    # Advance to next word
+    context.user_data["quiz_index"] = context.user_data.get("quiz_index", 0) + 1
+    return await _handle_batch_progress(update, context)
 
 
-async def _send_quiz_question(update: Update, context: ContextTypes.DEFAULT_TYPE) -> int:
-    """Fetch the next due word and send it as a quiz question.
+async def _send_batch_question(update: Update, context: ContextTypes.DEFAULT_TYPE) -> int:
+    """Send the current batch word as a quiz question.
 
-    Adapts question format based on quiz_mode stored in user_data.
-    Returns AWAITING_ANSWER if a question was sent, or END if no words are due.
+    Reads quiz_batch[quiz_index] and formats based on quiz_mode.
+    Returns AWAITING_ANSWER or END if batch data is missing.
     """
     user = update.effective_user
     reply_func = (
@@ -705,84 +772,132 @@ async def _send_quiz_question(update: Update, context: ContextTypes.DEFAULT_TYPE
 
     ui_lang = await _get_ui_lang(user.id)
     t = get_translator(ui_lang)
-    asked: set[int] = context.user_data.get("quiz_asked", set())
+
+    batch = context.user_data.get("quiz_batch", [])
+    index = context.user_data.get("quiz_index", 0)
     mode = context.user_data.get("quiz_mode", MODE_CLASSIC)
 
-    async with async_session_factory() as session:
-        word = await quiz_service.get_word_for_quiz(session, user.id, exclude_word_ids=asked)
+    if not batch or index >= len(batch):
+        # Safety: should not happen — _handle_batch_progress handles end-of-batch
+        clear_section(user.id)
+        _clear_quiz_data(context)
+        await reply_func(t("quiz_finished"))
+        return ConversationHandler.END
 
-        if word is None:
-            await session.commit()
-            msg = t("quiz_finished") if asked else t("quiz_no_words")
-            await reply_func(msg)
-            context.user_data.pop("quiz_word", None)
-            context.user_data.pop("quiz_asked", None)
-            context.user_data.pop("quiz_mode", None)
-            # CRITICAL: Clear QUIZ section to re-enable translation handler
-            clear_section(user.id)
-            return ConversationHandler.END
+    word_data = dict(batch[index])  # copy so we can add correct_index for choices
+    short_translation = word_data["translation"]
 
-        # Track this word as asked
-        asked.add(word.id)
-        context.user_data["quiz_asked"] = asked
+    # Progress header
+    progress = t("quiz_batch_progress", current=str(index + 1), total=str(len(batch)))
 
-        # Get first translation variant (short form for answer checking/display)
-        # Handles formats: "обычный", "1. обычный\n2. повседневный", "1. обычный 2. повседневный"
-        raw_translation = word.translation.strip()
-        # Split on numbered list markers like "1." "2." etc. (with or without newline before)
-        parts = _re.split(r'(?<!\d)\d+\.\s+', raw_translation)
-        parts = [p.strip() for p in parts if p.strip()]
-        short_translation = parts[0] if parts else raw_translation
-
-        # Store current quiz word in user context
-        quiz_data = {
-            "word_id": word.id,
-            "word": word.word,
-            "translation": short_translation,
-            "meaning": word.meaning,
-            "simple_explanation": word.simple_explanation,
-        }
-
-        # Build question based on mode
-        if mode == MODE_REVERSE:
-            text = t("quiz_reverse_q", translation=_h(short_translation))
-            keyboard = quiz_action_keyboard()
-
-        elif mode == MODE_CHOICES:
+    # Build question based on mode
+    if mode == MODE_REVERSE:
+        text = f"{progress}\n\n{t('quiz_reverse_q', translation=_h(short_translation))}"
+        keyboard = quiz_action_keyboard()
+    elif mode == MODE_CHOICES:
+        async with async_session_factory() as session:
+            word_obj = (await session.execute(
+                select(Word).where(Word.id == word_data["word_id"])
+            )).scalar_one()
             wrong_options = await quiz_service.get_choice_options(
-                session, user.id, word, count=3
+                session, user.id, word_obj, count=3
             )
+        options = [short_translation] + wrong_options
+        _random.shuffle(options)
+        correct_index = options.index(short_translation)
+        word_data["correct_index"] = correct_index
+        text = f"{progress}\n\n{t('quiz_choices_q', word=_h(word_data['word']))}"
+        keyboard = quiz_choices_keyboard(options, correct_index)
+    else:  # MODE_CLASSIC
+        text = f"{progress}\n\n{t('quiz_classic_q', word=_h(word_data['word']))}"
+        keyboard = quiz_action_keyboard()
 
-            options = [short_translation] + wrong_options
-            _random.shuffle(options)
-            correct_index = options.index(short_translation)
-            quiz_data["correct_index"] = correct_index
+    context.user_data["quiz_word"] = word_data
 
-            text = t("quiz_choices_q", word=_h(word.word))
-            keyboard = quiz_choices_keyboard(options, correct_index)
+    await reply_func(text, parse_mode=ParseMode.HTML, reply_markup=keyboard)
+    return AWAITING_ANSWER
 
-        else:  # MODE_CLASSIC
-            text = t("quiz_classic_q", word=_h(word.word))
-            keyboard = quiz_action_keyboard()
 
-        await session.commit()
+async def _handle_batch_progress(update: Update, context: ContextTypes.DEFAULT_TYPE) -> int:
+    """Check if batch is done; restart with mistakes or load next batch."""
+    user = update.effective_user
+    reply_func = (
+        update.callback_query.message.reply_text
+        if update.callback_query
+        else update.message.reply_text
+    )
 
-    context.user_data["quiz_word"] = quiz_data
+    ui_lang = await _get_ui_lang(user.id)
+    t = get_translator(ui_lang)
+
+    batch = context.user_data.get("quiz_batch", [])
+    index = context.user_data.get("quiz_index", 0)
+    mistakes = context.user_data.get("quiz_mistakes", [])
+
+    # Still have words left in this batch
+    if index < len(batch):
+        return await _send_batch_question(update, context)
+
+    # ── Batch complete ──
+    if mistakes:
+        # Restart the SAME batch (all words, not just mistakes)
+        await reply_func(
+            t("quiz_batch_repeat", mistakes=str(len(mistakes))),
+            parse_mode=ParseMode.HTML,
+        )
+        _random.shuffle(batch)
+        context.user_data["quiz_batch"] = batch
+        context.user_data["quiz_index"] = 0
+        context.user_data["quiz_mistakes"] = []
+        return await _send_batch_question(update, context)
+
+    # All correct — load next batch
+    await reply_func(
+        t("quiz_batch_complete", count=str(len(batch))),
+        parse_mode=ParseMode.HTML,
+    )
+
+    async with async_session_factory() as session:
+        words = await quiz_service.get_batch_for_quiz(session, user.id)
+
+    if not words:
+        clear_section(user.id)
+        _clear_quiz_data(context)
+        await reply_func(t("quiz_finished"))
+        return ConversationHandler.END
+
+    new_batch = []
+    for w in words:
+        new_batch.append({
+            "word_id": w.id,
+            "word": w.word,
+            "translation": _short_translation(w.translation),
+            "meaning": w.meaning,
+            "simple_explanation": w.simple_explanation,
+        })
+
+    context.user_data["quiz_batch"] = new_batch
+    context.user_data["quiz_index"] = 0
+    context.user_data["quiz_mistakes"] = []
 
     await reply_func(
-        text,
+        t("quiz_batch_start", count=str(len(new_batch))),
         parse_mode=ParseMode.HTML,
-        reply_markup=keyboard,
     )
-    return AWAITING_ANSWER
+    return await _send_batch_question(update, context)
+
+
+def _clear_quiz_data(context: ContextTypes.DEFAULT_TYPE) -> None:
+    """Remove all quiz-related keys from user_data."""
+    for key in ("quiz_word", "quiz_batch", "quiz_index", "quiz_mistakes",
+                "quiz_mode", "quiz_asked"):
+        context.user_data.pop(key, None)
 
 
 async def quiz_cancel_handler(update: Update, context: ContextTypes.DEFAULT_TYPE) -> int:
     """Cancel the active quiz session."""
     user = update.effective_user
-    context.user_data.pop("quiz_word", None)
-    context.user_data.pop("quiz_asked", None)
-    context.user_data.pop("quiz_mode", None)
+    _clear_quiz_data(context)
     # CRITICAL: Clear QUIZ section to re-enable translation handler
     clear_section(user.id)
     ui_lang = await _get_ui_lang(user.id)
@@ -974,7 +1089,10 @@ async def ielts_handler(update: Update, context: ContextTypes.DEFAULT_TYPE) -> N
 # ─── Word action callbacks ───────────────────────────────────────────────────
 
 async def word_quiz_callback(update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
-    """Handle 'Quiz' button click from word actions keyboard."""
+    """Handle 'Quiz' button click from word actions keyboard.
+
+    Loads a full batch (the clicked word will be included via weighted selection).
+    """
     query = update.callback_query
     await query.answer()
 
@@ -982,80 +1100,38 @@ async def word_quiz_callback(update: Update, context: ContextTypes.DEFAULT_TYPE)
     ui_lang = await _get_ui_lang(user.id)
     t = get_translator(ui_lang)
 
-    # Start quiz with the word included
-    try:
-        word_id = int(query.data.split(":")[1])
-        # CRITICAL: Set QUIZ section to block translation handler
-        set_section(user.id, Section.QUIZ)
-        context.user_data["quiz_mode"] = MODE_CLASSIC
-        context.user_data["quiz_asked"] = {word_id}
+    # CRITICAL: Set QUIZ section to block translation handler
+    set_section(user.id, Section.QUIZ)
 
-        # Send quiz mode selection or directly start quiz
-        await _send_quiz_question_from_callback(update, context, query.message.reply_text)
-    except (IndexError, ValueError):
-        await query.message.reply_text(t("quiz_no_words"))
-
-
-async def _send_quiz_question_from_callback(update: Update, context: ContextTypes.DEFAULT_TYPE, reply_func) -> int:
-    """Send next quiz question from callback context."""
-    user = update.effective_user
-    ui_lang = await _get_ui_lang(user.id)
-    t = get_translator(ui_lang)
-    asked: set[int] = context.user_data.get("quiz_asked", set())
-    mode = context.user_data.get("quiz_mode", MODE_CLASSIC)
-
+    # Load batch
     async with async_session_factory() as session:
-        word = await quiz_service.get_word_for_quiz(session, user.id, exclude_word_ids=asked)
+        words = await quiz_service.get_batch_for_quiz(session, user.id)
 
-        if word is None:
-            await session.commit()
-            msg = t("quiz_finished") if asked else t("quiz_no_words")
-            await reply_func(msg)
-            context.user_data.pop("quiz_word", None)
-            context.user_data.pop("quiz_asked", None)
-            context.user_data.pop("quiz_mode", None)
-            # CRITICAL: Clear QUIZ section to re-enable translation handler
-            clear_section(user.id)
-            return ConversationHandler.END
+    if not words:
+        clear_section(user.id)
+        await query.message.reply_text(t("quiz_no_words"))
+        return
 
-        asked.add(word.id)
-        context.user_data["quiz_asked"] = asked
+    batch = []
+    for w in words:
+        batch.append({
+            "word_id": w.id,
+            "word": w.word,
+            "translation": _short_translation(w.translation),
+            "meaning": w.meaning,
+            "simple_explanation": w.simple_explanation,
+        })
 
-        # Get first translation variant (same logic as _send_quiz_question)
-        raw_translation = word.translation.strip()
-        parts = _re.split(r'(?<!\d)\d+\.\s+', raw_translation)
-        parts = [p.strip() for p in parts if p.strip()]
-        short_translation = parts[0] if parts else raw_translation
+    context.user_data["quiz_mode"] = MODE_CLASSIC
+    context.user_data["quiz_batch"] = batch
+    context.user_data["quiz_index"] = 0
+    context.user_data["quiz_mistakes"] = []
 
-        quiz_data = {
-            "word_id": word.id,
-            "word": word.word,
-            "translation": short_translation,
-            "meaning": word.meaning,
-            "simple_explanation": word.simple_explanation,
-        }
-
-        if mode == MODE_REVERSE:
-            text = t("quiz_reverse_q", translation=_h(short_translation))
-            keyboard = quiz_action_keyboard()
-        elif mode == MODE_CHOICES:
-            wrong_options = await quiz_service.get_choice_options(session, user.id, word, count=3)
-            options = [short_translation] + wrong_options
-            _random.shuffle(options)
-            correct_index = options.index(short_translation)
-            quiz_data["correct_index"] = correct_index
-            text = t("quiz_choices_q", word=_h(word.word))
-            keyboard = quiz_choices_keyboard(options, correct_index)
-        else:
-            text = t("quiz_classic_q", word=_h(word.word))
-            keyboard = quiz_action_keyboard()
-
-        await session.commit()
-
-    context.user_data["quiz_word"] = quiz_data
-
-    await reply_func(text, parse_mode=ParseMode.HTML, reply_markup=keyboard)
-    return AWAITING_ANSWER
+    await query.message.reply_text(
+        t("quiz_batch_start", count=str(len(batch))),
+        parse_mode=ParseMode.HTML,
+    )
+    await _send_batch_question(update, context)
 
 
 async def word_library_callback(update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:

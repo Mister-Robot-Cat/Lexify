@@ -401,6 +401,26 @@ _STRINGS: dict[str, dict[str, str]] = {
         "ru": "✏️ Твой ответ: <b>{answer}</b>",
         "az": "✏️ Sənin cavabın: <b>{answer}</b>",
     },
+    "quiz_batch_start": {
+        "en": "📦 <b>New set of {count} words!</b>\nLet's go — translate them all correctly to move on.",
+        "ru": "📦 <b>Новый набор из {count} слов!</b>\nПереведи все правильно, чтобы двигаться дальше.",
+        "az": "📦 <b>{count} sözdən ibarət yeni dəst!</b>\nHamısını düzgün tərcümə et ki, irəli gedəsən.",
+    },
+    "quiz_batch_repeat": {
+        "en": "🔁 <b>You made {mistakes} mistake(s).</b>\nLet's repeat this set until you master it!",
+        "ru": "🔁 <b>Ты допустил {mistakes} ошибок(и).</b>\nПовторим этот набор, пока не выучишь!",
+        "az": "🔁 <b>{mistakes} səhv etdin.</b>\nBu dəsti mənimsəyənə qədər təkrarlayaq!",
+    },
+    "quiz_batch_complete": {
+        "en": "🎉 <b>Excellent!</b> All {count} words correct!\nLoading next set...",
+        "ru": "🎉 <b>Отлично!</b> Все {count} слов правильно!\nЗагружаю следующий набор...",
+        "az": "🎉 <b>Əla!</b> Bütün {count} söz düzgündür!\nNövbəti dəst yüklənir...",
+    },
+    "quiz_batch_progress": {
+        "en": "📊 Word <b>{current}</b> of <b>{total}</b>",
+        "ru": "📊 Слово <b>{current}</b> из <b>{total}</b>",
+        "az": "📊 <b>{total}</b> sözdən <b>{current}</b>-ci",
+    },
 
     # Word processing
     "word_looking_up": {

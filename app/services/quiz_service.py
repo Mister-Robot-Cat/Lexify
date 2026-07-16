@@ -21,6 +21,9 @@ WRONG_INTERVAL = datetime.timedelta(hours=1)
 # Minimum similarity ratio to accept a fuzzy answer
 SIMILARITY_THRESHOLD = 0.75
 
+# Batch size for quiz sessions
+QUIZ_BATCH_SIZE = 10
+
 # Pagination
 LIBRARY_PAGE_SIZE = 5
 
@@ -113,6 +116,64 @@ class QuizService:
         )
 
         return selected_uw.word
+
+    async def get_batch_for_quiz(
+        self,
+        session: AsyncSession,
+        telegram_id: int,
+        batch_size: int = QUIZ_BATCH_SIZE,
+    ) -> list[Word]:
+        """Select a batch of words for a quiz session using weighted random.
+
+        Returns up to `batch_size` Word objects. Uses the same weighting as
+        get_word_for_quiz but picks multiple unique words at once.
+        """
+        user = await word_service.get_or_create_user(session, telegram_id)
+
+        stmt = (
+            select(UserWord)
+            .options(joinedload(UserWord.word))
+            .where(UserWord.user_id == user.id)
+        )
+        result = await session.execute(stmt)
+        user_words = list(result.scalars().all())
+
+        if not user_words:
+            return []
+
+        now = datetime.datetime.utcnow()
+
+        # Build weighted pool
+        weighted_pool: list[tuple[UserWord, float]] = []
+        for uw in user_words:
+            weight = 1.0
+            if uw.wrong_count > 0:
+                weight = uw.wrong_count * 10.0
+            if uw.next_review <= now:
+                weight += 5.0
+            if uw.correct_count == 0 and uw.wrong_count == 0:
+                weight = 3.0
+            if uw.correct_count > 0 and uw.wrong_count == 0:
+                weight = max(1.0, weight / (1 + uw.correct_count))
+            weighted_pool.append((uw, weight))
+
+        # Select up to batch_size unique words via weighted sampling
+        selected: list[Word] = []
+        remaining = list(weighted_pool)
+
+        while len(selected) < batch_size and remaining:
+            items, weights = zip(*remaining)
+            chosen_uw: UserWord = random.choices(items, weights=weights, k=1)[0]
+            selected.append(chosen_uw.word)
+            remaining = [(uw, w) for uw, w in remaining if uw.word_id != chosen_uw.word_id]
+
+        random.shuffle(selected)
+
+        logger.info(
+            "Quiz batch loaded: %d words for user %d",
+            len(selected), telegram_id,
+        )
+        return selected
 
     async def get_choice_options(
         self, session: AsyncSession, telegram_id: int, correct_word: Word, count: int = 3
