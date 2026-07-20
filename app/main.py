@@ -4,6 +4,7 @@ from contextlib import asynccontextmanager
 
 import uvicorn
 from fastapi import FastAPI, Request, Response
+from fastapi.middleware.cors import CORSMiddleware
 from telegram import BotCommand, Update
 from telegram.ext import Application
 
@@ -11,6 +12,7 @@ from app.bot.handlers import register_handlers
 from app.bot.reminders import daily_review_reminder, word_of_the_day
 from app.config import settings
 from app.database.session import close_db, init_db
+from app.api.router import api_router
 
 # ─── Logging ──────────────────────────────────────────────────────────────────
 
@@ -108,6 +110,16 @@ app = FastAPI(
     version="1.0.0",
     lifespan=lifespan,
 )
+
+app.add_middleware(
+    CORSMiddleware,
+    allow_origins=["*"],  # For dev, update in production
+    allow_credentials=True,
+    allow_methods=["*"],
+    allow_headers=["*"],
+)
+
+app.include_router(api_router, prefix="/api")
 
 
 @app.post("/webhook")

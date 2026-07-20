@@ -32,6 +32,7 @@ class Settings(BaseSettings):
     log_level: str = Field("INFO", description="Logging level")
     bot_mode: str = Field("polling", description="Bot mode: 'polling' or 'webhook'")
     webhook_url: str | None = Field(None, description="Webhook URL for production")
+    jwt_secret: str = Field("supersecretkeyforjwt", description="JWT secret key for Web API")
 
     model_config = {"env_file": ".env", "env_file_encoding": "utf-8"}
 
