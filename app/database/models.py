@@ -18,6 +18,10 @@ class Base(DeclarativeBase):
 
 
 class User(Base):
+    """
+    Represents a Telegram user in the system.
+    Stores language preferences and UI settings for internationalization.
+    """
     __tablename__ = "users"
 
     id: Mapped[int] = mapped_column(Integer, primary_key=True, autoincrement=True)
@@ -38,6 +42,10 @@ class User(Base):
 
 
 class Word(Base):
+    """
+    Represents a dictionary word with its translations, examples, and meanings.
+    This acts as a global dictionary shared among all users.
+    """
     __tablename__ = "words"
     __table_args__ = (
         UniqueConstraint("word", "language", name="uq_word_language"),
