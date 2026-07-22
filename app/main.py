@@ -1,3 +1,4 @@
+import asyncio
 import logging
 import sys
 from contextlib import asynccontextmanager
@@ -7,6 +8,7 @@ from fastapi import FastAPI, Request, Response
 from fastapi.middleware.cors import CORSMiddleware
 from telegram import BotCommand, Update
 from telegram.ext import Application
+from telegram.request import HTTPXRequest
 
 from app.bot.handlers import register_handlers
 from app.bot.reminders import daily_review_reminder, word_of_the_day
@@ -25,9 +27,16 @@ logger = logging.getLogger(__name__)
 
 # ─── Telegram Application (built once, shared) ───────────────────────────────
 
+bot_request = HTTPXRequest(
+    connect_timeout=60.0,
+    read_timeout=60.0,
+    write_timeout=60.0,
+    pool_timeout=60.0,
+)
 bot_app = (
     Application.builder()
     .token(settings.telegram_bot_token)
+    .request(bot_request)
     .build()
 )
 register_handlers(bot_app)
@@ -41,26 +50,37 @@ async def lifespan(app: FastAPI):
     # Startup
     logger.info("Starting Lexify bot…")
     await init_db()
-    await bot_app.initialize()
 
-    # Set bot command menu visible to users
-    await bot_app.bot.set_my_commands([
-        BotCommand("start", "👋 Welcome & instructions"),
-        BotCommand("menu", "📋 Choose section (Words/Grammar/IELTS)"),
-        BotCommand("quiz", "🎯 Practice your vocabulary"),
-        BotCommand("library", "📚 View your word collection"),
-        BotCommand("topics", "📦 Themed word packs"),
-        BotCommand("ask", "❓ Grammar chatbot (new chat)"),
-        BotCommand("clear", "🗑 Clear grammar chat history"),
-        BotCommand("ielts", "📝 IELTS writing evaluation"),
-        BotCommand("language", "🌍 Choose translation language"),
-        BotCommand("learning", "📖 Choose language to learn"),
-        BotCommand("ui", "🖥 Bot interface language"),
-        BotCommand("delete", "🗑 Remove a word from library"),
-        BotCommand("progress", "📊 See your learning stats"),
-        BotCommand("cancel", "🚫 Cancel current quiz"),
-    ])
-    logger.info("Bot command menu set.")
+    # Retry loop for Telegram API initialization in case of transient network timeouts
+    for attempt in range(5):
+        try:
+            await bot_app.initialize()
+            # Set bot command menu visible to users
+            await bot_app.bot.set_my_commands([
+                BotCommand("start", "👋 Welcome & instructions"),
+                BotCommand("menu", "📋 Choose section (Words/Grammar/IELTS)"),
+                BotCommand("quiz", "🎯 Practice your vocabulary"),
+                BotCommand("library", "📚 View your word collection"),
+                BotCommand("topics", "📦 Themed word packs"),
+                BotCommand("ask", "❓ Grammar chatbot (new chat)"),
+                BotCommand("clear", "🗑 Clear grammar chat history"),
+                BotCommand("ielts", "📝 IELTS writing evaluation"),
+                BotCommand("language", "🌍 Choose translation language"),
+                BotCommand("learning", "📖 Choose language to learn"),
+                BotCommand("ui", "🖥 Bot interface language"),
+                BotCommand("delete", "🗑 Remove a word from library"),
+                BotCommand("progress", "📊 See your learning stats"),
+                BotCommand("cancel", "🚫 Cancel current quiz"),
+            ])
+            logger.info("Bot initialized and command menu set.")
+            break
+        except Exception as exc:
+            if attempt == 4:
+                logger.error("Failed to connect to Telegram API after 5 attempts.")
+                raise
+            logger.warning("Telegram initialization attempt %d failed (%s). Retrying in 3s...", attempt + 1, exc)
+            await asyncio.sleep(3)
+
 
     # Schedule daily review reminder (runs every 24 hours)
     bot_app.job_queue.run_repeating(

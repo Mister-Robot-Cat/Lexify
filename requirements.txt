@@ -11,3 +11,5 @@ pydantic-settings==2.7.1
 python-dotenv==1.0.1
 redis==5.0.1
 tenacity==8.2.3
+python-jose[cryptography]==3.5.0
+
