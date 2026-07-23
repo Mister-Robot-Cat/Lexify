@@ -49,6 +49,10 @@ def validate_init_data(init_data: str, bot_token: str) -> dict | None:
 
 @router.post("/login", response_model=Token)
 async def login(data: TelegramAuthData, db: AsyncSession = Depends(get_db)):
+    """
+    Authenticate a user via Telegram Web App initData.
+    Returns a JWT access token for subsequent API requests.
+    """
     # Verify Telegram Web App initData
     user_data = validate_init_data(data.initData, settings.telegram_bot_token)
     
