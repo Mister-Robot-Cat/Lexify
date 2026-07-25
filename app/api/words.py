@@ -13,6 +13,10 @@ async def get_my_words(
     db: AsyncSession = Depends(get_db),
     current_user: User = Depends(get_current_user)
 ):
+    """
+    Retrieve all words saved in the current user's personal vocabulary library.
+    Includes translation, meaning, and spaced repetition progress stats.
+    """
     stmt = (
         select(UserWord)
         .options(selectinload(UserWord.word))
