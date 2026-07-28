@@ -1,6 +1,6 @@
 import logging
 
-from sqlalchemy import select
+from sqlalchemy import func, select
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.database.models import User, UserWord, Word
@@ -192,10 +192,10 @@ class WordService:
         return user.learning_language
 
     async def get_user_word_count(self, session: AsyncSession, user: User) -> int:
-        """Return total number of words in user's vocabulary."""
-        stmt = select(UserWord).where(UserWord.user_id == user.id)
+        """Return total number of words in user's vocabulary using DB count query."""
+        stmt = select(func.count(UserWord.id)).where(UserWord.user_id == user.id)
         result = await session.execute(stmt)
-        return len(result.scalars().all())
+        return result.scalar() or 0
 
     def _detect_language(self, text: str, user_language: str, learning_language: str) -> str:
         """Simple language detection based on characters and user preferences.
