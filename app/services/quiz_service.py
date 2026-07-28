@@ -28,6 +28,11 @@ QUIZ_BATCH_SIZE = 10
 LIBRARY_PAGE_SIZE = 5
 
 
+def _now_utc() -> datetime.datetime:
+    """Return current UTC datetime (naive for DB compatibility)."""
+    return datetime.datetime.now(datetime.timezone.utc).replace(tzinfo=None)
+
+
 @dataclass
 class LibraryPage:
     """A page of user words for the /library display."""
@@ -78,7 +83,7 @@ class QuizService:
         if not user_words:
             return None
 
-        now = datetime.datetime.utcnow()
+        now = _now_utc()
 
         # Build weighted pool
         weighted_pool: list[tuple[UserWord, float]] = []
@@ -141,7 +146,7 @@ class QuizService:
         if not user_words:
             return []
 
-        now = datetime.datetime.utcnow()
+        now = _now_utc()
 
         # Build weighted pool
         weighted_pool: list[tuple[UserWord, float]] = []
@@ -266,7 +271,7 @@ class QuizService:
         - Wrong:   next_review = now + 1 hour
         """
         user = await word_service.get_or_create_user(session, telegram_id)
-        now = datetime.datetime.utcnow()
+        now = _now_utc()
 
         stmt = select(UserWord).where(
             UserWord.user_id == user.id,
@@ -304,7 +309,7 @@ class QuizService:
         total_wrong = sum(uw.wrong_count for uw in user_words)
         total_reviews = total_correct + total_wrong
 
-        now = datetime.datetime.utcnow()
+        now = _now_utc()
         due_for_review = sum(1 for uw in user_words if uw.next_review <= now)
 
         return {
