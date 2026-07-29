@@ -283,6 +283,13 @@ class IELTSService:
                 except ValueError:
                     continue
 
+        # Fallback: compute average of criteria scores if overall score pattern wasn't matched
+        if overall_score == 0.0:
+            scores = [tr_data.get("score", 0.0), cc_data.get("score", 0.0), lr_data.get("score", 0.0), gra_data.get("score", 0.0)]
+            if any(s > 0 for s in scores):
+                avg = sum(scores) / len(scores)
+                overall_score = round(avg * 2) / 2
+
         feedback_patterns = [
             r"Overall Feedback: (.*)",
             r"Overall Feedback:\s*(.*)",
