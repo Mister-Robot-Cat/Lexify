@@ -28,6 +28,7 @@ logger = logging.getLogger(__name__)
 # ─── Telegram Application (built once, shared) ───────────────────────────────
 
 bot_request = HTTPXRequest(
+    proxy_url=settings.telegram_proxy_url if settings.telegram_proxy_url else None,
     connect_timeout=60.0,
     read_timeout=60.0,
     write_timeout=60.0,

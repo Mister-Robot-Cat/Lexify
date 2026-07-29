@@ -7,6 +7,7 @@ class Settings(BaseSettings):
 
     # Telegram
     telegram_bot_token: str = Field(..., description="Telegram Bot API token")
+    telegram_proxy_url: str | None = Field(None, description="Proxy URL for Telegram API (e.g. http://127.0.0.1:10808 or socks5://127.0.0.1:10808)")
 
     # Database
     database_url: str = Field(
