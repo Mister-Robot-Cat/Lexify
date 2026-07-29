@@ -530,6 +530,11 @@ def get_translator(language: str) -> callable:
             return f"[{key}]"  # missing key fallback
 
         string = _STRINGS[key].get(language, _STRINGS[key].get("en", f"[{key}]"))
-        return string.format(**kwargs) if kwargs else string
+        if kwargs:
+            try:
+                return string.format(**kwargs)
+            except (KeyError, ValueError):
+                return string
+        return string
 
     return t
