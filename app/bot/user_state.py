@@ -57,8 +57,8 @@ def clear_section(telegram_id: int) -> None:
 # ─── Chat history for Grammar chatbot ────────────────────────────────────────
 
 def get_chat_history(telegram_id: int) -> list[dict[str, str]]:
-    """Get chat history for a user. Returns empty list if none."""
-    return _chat_histories.get(telegram_id, [])
+    """Get chat history for a user. Returns a copy of the message list."""
+    return list(_chat_histories.get(telegram_id, []))
 
 
 def append_chat_message(telegram_id: int, role: str, content: str) -> None:
