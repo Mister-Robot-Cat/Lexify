@@ -9,14 +9,35 @@ const inter = Inter({
 })
 
 export const metadata: Metadata = {
-  title: 'Lexify - AI-Powered Language Learning',
-  description: 'Master vocabulary with AI explanations, IELTS coaching, and intelligent quizzes directly in Telegram.',
-  keywords: ['language learning', 'vocabulary', 'IELTS', 'AI tutor', 'Telegram bot'],
-  authors: [{ name: 'Lexify' }],
+  metadataBase: new URL(process.env.NEXT_PUBLIC_SITE_URL || 'http://localhost:3000'),
+  title: 'Lexify - AI-Powered Language Learning & IELTS Prep in Telegram',
+  description: 'Master English vocabulary with AI explanations, IELTS writing evaluation, and spaced repetition quizzes directly in Telegram and Web.',
+  keywords: [
+    'language learning',
+    'vocabulary builder',
+    'IELTS writing evaluation',
+    'AI English tutor',
+    'Telegram language bot',
+    'spaced repetition',
+    'Groq AI'
+  ],
+  authors: [{ name: 'Lexify Team' }],
   openGraph: {
-    title: 'Lexify - AI-Powered Language Learning',
-    description: 'Master vocabulary with AI explanations, IELTS coaching, and intelligent quizzes.',
+    title: 'Lexify - AI-Powered Language Learning & IELTS Prep',
+    description: 'Master vocabulary with AI explanations, IELTS writing feedback, and spaced repetition quizzes.',
+    url: 'https://lexify.app',
+    siteName: 'Lexify',
+    locale: 'en_US',
     type: 'website',
+  },
+  twitter: {
+    card: 'summary_large_image',
+    title: 'Lexify - AI Language Learning in Telegram',
+    description: 'AI explanations, spaced repetition, and instant IELTS writing evaluations.',
+  },
+  robots: {
+    index: true,
+    follow: true,
   },
 }
 
