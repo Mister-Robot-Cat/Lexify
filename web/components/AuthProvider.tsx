@@ -1,77 +1,98 @@
-"use client";
+'use client'
 
-import { createContext, useContext, useEffect, useState } from "react";
-import { fetchApi } from "../lib/api";
-
-interface User {
-  id: number;
-  telegram_id: number;
-  language: string;
-  ui_language: string;
-  learning_language: string;
-}
+import { createContext, useContext, useEffect, useState, useCallback } from 'react'
+import { api, clearToken, getToken, setToken } from '@/lib/api'
+import { translate } from '@/lib/i18n'
+import type { User } from '@/lib/types'
 
 interface AuthContextType {
-  user: User | null;
-  loading: boolean;
-  login: (initData: string) => Promise<void>;
-  logout: () => void;
+  user: User | null
+  loading: boolean
+  login: (email: string, password: string) => Promise<void>
+  register: (payload: {
+    email: string
+    password: string
+    display_name?: string
+    language?: string
+    learning_language?: string
+    ui_language?: string
+  }) => Promise<void>
+  loginWithTelegram: (initData: string) => Promise<void>
+  logout: () => void
+  refresh: () => Promise<void>
+  t: (key: string) => string
 }
 
-const AuthContext = createContext<AuthContextType | undefined>(undefined);
+const AuthContext = createContext<AuthContextType | undefined>(undefined)
 
 export function AuthProvider({ children }: { children: React.ReactNode }) {
-  const [user, setUser] = useState<User | null>(null);
-  const [loading, setLoading] = useState(true);
+  const [user, setUser] = useState<User | null>(null)
+  const [loading, setLoading] = useState(true)
+
+  const refresh = useCallback(async () => {
+    const token = getToken()
+    if (!token) {
+      setUser(null)
+      return
+    }
+    try {
+      const userData = await api.users.me()
+      setUser(userData)
+    } catch {
+      clearToken()
+      setUser(null)
+    }
+  }, [])
 
   useEffect(() => {
-    const initAuth = async () => {
-      const token = localStorage.getItem("lexify_token");
-      if (token) {
-        try {
-          const userData = await fetchApi("/users/me");
-          setUser(userData);
-        } catch (err) {
-          localStorage.removeItem("lexify_token");
-        }
-      }
-      setLoading(false);
-    };
-    initAuth();
-  }, []);
+    refresh().finally(() => setLoading(false))
+  }, [refresh])
 
-  const login = async (initData: string) => {
+  const login = async (email: string, password: string) => {
+    const { access_token } = await api.auth.login(email, password)
+    setToken(access_token)
+    await refresh()
+  }
+
+  const register: AuthContextType['register'] = async (payload) => {
+    const { access_token } = await api.auth.register(payload)
+    setToken(access_token)
+    await refresh()
+  }
+
+  const loginWithTelegram = async (initData: string) => {
+    if (!initData?.trim()) return
     try {
-      const { access_token } = await fetchApi("/auth/login", {
-        method: "POST",
-        body: JSON.stringify({ initData }),
-      });
-      localStorage.setItem("lexify_token", access_token);
-      const userData = await fetchApi("/users/me");
-      setUser(userData);
+      const { access_token } = await api.auth.telegram(initData)
+      setToken(access_token)
+      await refresh()
     } catch (err) {
-      console.error("Login failed", err);
-      throw err;
+      console.warn('Telegram authentication failed:', err)
+      throw err
     }
-  };
+  }
 
   const logout = () => {
-    localStorage.removeItem("lexify_token");
-    setUser(null);
-    window.location.href = "/";
-  };
+    clearToken()
+    setUser(null)
+    window.location.href = '/'
+  }
+
+  const t = (key: string) => translate(user?.ui_language ?? 'en', key)
 
   return (
-    <AuthContext.Provider value={{ user, loading, login, logout }}>
+    <AuthContext.Provider
+      value={{ user, loading, login, register, loginWithTelegram, logout, refresh, t }}
+    >
       {children}
     </AuthContext.Provider>
-  );
+  )
 }
 
 export function useAuth() {
-  const context = useContext(AuthContext);
+  const context = useContext(AuthContext)
   if (context === undefined) {
-    throw new Error("useAuth must be used within an AuthProvider");
+    throw new Error('useAuth must be used within an AuthProvider')
   }
-  return context;
+  return context
 }
