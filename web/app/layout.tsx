@@ -2,6 +2,7 @@ import type { Metadata } from 'next'
 import { Inter } from 'next/font/google'
 import './globals.css'
 import { AuthProvider } from '@/components/AuthProvider'
+import JsonLd from '@/components/JsonLd'
 
 const inter = Inter({ 
   subsets: ['latin'],
@@ -48,6 +49,9 @@ export default function RootLayout({
 }) {
   return (
     <html lang="en" className="dark">
+      <head>
+        <JsonLd />
+      </head>
       <body className={`${inter.className} bg-black text-white antialiased`}>
         <AuthProvider>
           {children}
