@@ -1,6 +1,6 @@
 'use client';
 
-import { Share2 } from 'lucide-react';
+import { Check, Share2 } from 'lucide-react';
 import { useState } from 'react';
 
 interface ShareButtonProps {
@@ -31,15 +31,17 @@ export default function ShareButton({
     // Fallback: Telegram share URL
     const tgShareUrl = `https://t.me/share/url?url=${encodeURIComponent(url)}&text=${encodeURIComponent(text)}`;
     window.open(tgShareUrl, '_blank');
+    setCopied(true);
+    setTimeout(() => setCopied(false), 2000);
   };
 
   return (
     <button
       onClick={handleShare}
-      className={`inline-flex items-center gap-2 rounded-xl bg-blue-600/20 border border-blue-500/30 px-4 py-2 text-sm font-medium text-blue-400 hover:bg-blue-600/30 transition-all ${className}`}
+      className={`inline-flex items-center gap-2 rounded-xl bg-blue-600/20 border border-blue-500/30 px-4 py-2 text-sm font-medium text-blue-400 hover:bg-blue-600/30 active:scale-95 transition-all duration-200 hover:shadow-lg hover:shadow-blue-500/10 ${className}`}
     >
-      <Share2 size={16} />
-      {copied ? 'Link Copied!' : 'Share Lexify'}
+      {copied ? <Check size={16} className="text-green-400" /> : <Share2 size={16} />}
+      {copied ? 'Link Shared!' : 'Share Lexify'}
     </button>
   );
 }
