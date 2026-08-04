@@ -43,3 +43,19 @@ export function getTelegramUser(): TelegramUser | null {
   const tg = getTelegramWebApp();
   return tg?.initDataUnsafe?.user || null;
 }
+
+export function showMainButton(text: string, onClick: () => void) {
+  const tg = getTelegramWebApp();
+  if (!tg?.MainButton) return;
+
+  tg.MainButton.setText(text);
+  tg.MainButton.onClick(onClick);
+  tg.MainButton.show();
+}
+
+export function hideMainButton() {
+  const tg = getTelegramWebApp();
+  if (!tg?.MainButton) return;
+
+  tg.MainButton.hide();
+}
