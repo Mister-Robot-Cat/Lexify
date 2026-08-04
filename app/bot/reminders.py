@@ -34,7 +34,7 @@ async def daily_review_reminder(context: ContextTypes.DEFAULT_TYPE) -> None:
     Scheduled to run once per day via JobQueue.
     """
     logger.info("Running daily review reminder job…")
-    now = datetime.datetime.utcnow()
+    now = datetime.datetime.now(datetime.timezone.utc).replace(tzinfo=None)
 
     async with async_session_factory() as session:
         result = await session.execute(select(User))
