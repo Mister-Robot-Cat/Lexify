@@ -62,3 +62,18 @@ TOPIC_KEYS: dict[str, str] = {
 
 # Reverse: full name -> short key
 TOPIC_NAME_TO_KEY: dict[str, str] = {v: k for k, v in TOPIC_KEYS.items()}
+
+
+def get_topic_names() -> list[str]:
+    """Return all available topic pack names."""
+    return list(TOPIC_PACKS.keys())
+
+
+def get_words_for_topic(key_or_name: str) -> list[str]:
+    """Get list of words for a given topic name or callback key."""
+    if key_or_name in TOPIC_PACKS:
+        return TOPIC_PACKS[key_or_name]
+    if key_or_name in TOPIC_KEYS:
+        topic_name = TOPIC_KEYS[key_or_name]
+        return TOPIC_PACKS.get(topic_name, [])
+    return []
