@@ -3,8 +3,15 @@ export default function JsonLd() {
     '@context': 'https://schema.org',
     '@type': 'SoftwareApplication',
     name: 'Lexify',
+    url: 'https://lexify.app',
     applicationCategory: 'EducationalApplication',
     operatingSystem: 'Telegram, Web, Android, iOS',
+    featureList: [
+      'AI vocabulary explanations',
+      'IELTS writing evaluation',
+      'Spaced repetition quizzes',
+      'Grammar chatbot',
+    ],
     offers: {
       '@type': 'Offer',
       price: '0',
