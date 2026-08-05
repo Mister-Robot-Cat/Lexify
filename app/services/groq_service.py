@@ -117,6 +117,9 @@ class WordExplanation(BaseModel):
             return "N/A"
         return upper_v
 
+    def __repr__(self) -> str:
+        return f"<WordExplanation word={self.word!r} level={self.level} translation={self.translation[:30]!r}>"
+
 
 class ReverseTranslation(BaseModel):
     """Structured result for reverse translation (native -> learning language)."""
