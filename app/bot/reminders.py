@@ -4,7 +4,7 @@ import datetime
 import logging
 import random
 
-from sqlalchemy import select
+from sqlalchemy import func, select
 from sqlalchemy.orm import joinedload
 from telegram.ext import ContextTypes
 
@@ -42,12 +42,12 @@ async def daily_review_reminder(context: ContextTypes.DEFAULT_TYPE) -> None:
 
         for user in users:
             try:
-                stmt = select(UserWord).where(
+                stmt = select(func.count(UserWord.id)).where(
                     UserWord.user_id == user.id,
                     UserWord.next_review <= now,
                 )
                 due_result = await session.execute(stmt)
-                due_count = len(due_result.scalars().all())
+                due_count = due_result.scalar() or 0
 
                 if due_count == 0:
                     continue
