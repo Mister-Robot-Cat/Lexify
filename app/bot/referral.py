@@ -45,3 +45,21 @@ def parse_referral_code(start_param: str | None) -> int | None:
         return int(raw_id)
 
     return None
+
+
+def generate_share_text(bot_username: str, telegram_id: int) -> str:
+    """Generate a ready-to-share referral message for the user to forward.
+
+    Args:
+        bot_username: Username of the bot (without @).
+        telegram_id: Telegram ID of the referring user.
+
+    Returns:
+        Formatted string with referral link and call-to-action.
+    """
+    link = generate_referral_link(bot_username, telegram_id)
+    return (
+        f"🚀 I'm learning English with Lexify — an AI-powered vocab bot!\n\n"
+        f"📖 It explains words, evaluates IELTS essays, and quizzes you with spaced repetition.\n\n"
+        f"Try it here 👇\n{link}"
+    )
