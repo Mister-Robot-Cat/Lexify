@@ -1,5 +1,13 @@
 from telegram import InlineKeyboardButton, InlineKeyboardMarkup
 
+from app.constants import (  # noqa: F401  (re-exported for bot modules)
+    LANGUAGES,
+    LEARNING_LANGUAGES,
+    MODE_CHOICES,
+    MODE_CLASSIC,
+    MODE_REVERSE,
+)
+
 # Callback data prefixes
 QUIZ_START = "quiz_start"
 QUIZ_SKIP = "quiz_skip"
@@ -15,25 +23,6 @@ WORD_QUIZ = "word_quiz"
 WORD_LIBRARY = "word_library"
 WORD_DELETE = "word_delete"
 WORD_MORE = "word_more"
-
-# Quiz modes
-MODE_CLASSIC = "classic"        # EN word → type translation
-MODE_REVERSE = "reverse"        # translation → type EN word
-MODE_CHOICES = "choices"        # EN word → pick from 4 buttons
-
-# Supported target / native languages
-LANGUAGES = {
-    "Russian": "🇷🇺 Русский",
-    "Azerbaijani": "🇦🇿 Azərbaycanca",
-    "English": "🇬🇧 English"
-}
-
-# Languages available for learning
-LEARNING_LANGUAGES = {
-    "English": "🇬🇧 English",
-    "Russian": "🇷🇺 Русский",
-    "Azerbaijani": "🇦🇿 Azərbaycanca"
-}
 
 
 def quiz_mode_keyboard(
@@ -207,3 +196,8 @@ def word_actions_keyboard(word_id: int) -> InlineKeyboardMarkup:
             InlineKeyboardButton("➕ Ещё слово", callback_data=WORD_MORE),
         ],
     ])
+
+
+def cancel_keyboard(label: str = "❌ Cancel") -> InlineKeyboardMarkup:
+    """Inline keyboard with a cancel button for active flow cancellation."""
+    return InlineKeyboardMarkup([[InlineKeyboardButton(label, callback_data="quiz_cancel")]])
