@@ -10,6 +10,7 @@ interface GlowButtonProps {
   variant?: "primary" | "secondary";
   className?: string;
   external?: boolean;
+  showArrow?: boolean;
 }
 
 export function GlowButton({
@@ -19,6 +20,7 @@ export function GlowButton({
   variant = "primary",
   className = "",
   external = false,
+  showArrow = true,
 }: GlowButtonProps) {
   const baseStyles = `
     group relative inline-flex items-center gap-2 px-8 py-4 
@@ -52,7 +54,9 @@ export function GlowButton({
       {glowStyles}
       <span className="relative z-10 flex items-center gap-2">
         {children}
-        <ArrowRight className="w-5 h-5 transition-transform duration-300 group-hover:translate-x-1" />
+        {showArrow && (
+          <ArrowRight className="w-5 h-5 transition-transform duration-300 group-hover:translate-x-1" />
+        )}
       </span>
     </>
   );
