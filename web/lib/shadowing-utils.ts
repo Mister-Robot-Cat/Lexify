@@ -1,7 +1,8 @@
 const YOUTUBE_ID_RE = /^[A-Za-z0-9_-]{11}$/
 
 /** Extract an 11-character YouTube video id from a raw id or a full URL. */
-export function extract_video_id_client(value: string): string | null {
+export function extract_video_id_client(value: string | null | undefined): string | null {
+  if (!value || typeof value !== 'string') return null
   const trimmed = value.trim()
   if (YOUTUBE_ID_RE.test(trimmed)) return trimmed
 
