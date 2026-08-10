@@ -37,10 +37,14 @@ def parse_referral_code(start_param: str | None) -> int | None:
     Returns:
         Telegram ID of the referrer or None if invalid.
     """
-    if not start_param or not start_param.startswith(REFERRAL_PREFIX):
+    if not start_param or not isinstance(start_param, str):
         return None
 
-    raw_id = start_param[len(REFERRAL_PREFIX):]
+    clean_param = start_param.strip()
+    if not clean_param.startswith(REFERRAL_PREFIX):
+        return None
+
+    raw_id = clean_param[len(REFERRAL_PREFIX):]
     if raw_id.isdigit():
         return int(raw_id)
 
