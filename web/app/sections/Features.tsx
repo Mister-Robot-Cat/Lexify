@@ -81,7 +81,7 @@ export default function Features() {
         entries.forEach((entry) => {
           const index = parseInt(entry.target.getAttribute('data-index') || '0')
           if (entry.isIntersecting) {
-            setVisibleCards((prev) => new Set([...prev, index]))
+            setVisibleCards((prev) => new Set(Array.from(prev).concat(index)))
           }
         })
       },
@@ -124,7 +124,7 @@ export default function Features() {
                 key={index}
                 ref={(el) => { cardRefs.current[index] = el }}
                 data-index={index}
-                className={`feature-card group ${
+                className={`feature-card group hover:border-primary/30 hover:shadow-lg hover:shadow-indigo-500/10 ${
                   isVisible ? 'opacity-100 translate-y-0' : 'opacity-0 translate-y-8'
                 } transition-all duration-500`}
                 style={{ transitionDelay: `${(index % 4) * 100}ms` }}
