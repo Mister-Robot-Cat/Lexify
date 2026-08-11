@@ -45,6 +45,10 @@ export class ApiError extends Error {
   }
 }
 
+export function isApiError(error: unknown): error is ApiError {
+  return error instanceof ApiError
+}
+
 interface RequestOptions extends Omit<RequestInit, 'body'> {
   body?: unknown
   /** Skip the automatic redirect to /login on a 401. */
