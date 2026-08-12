@@ -23,8 +23,9 @@ export default function ShareButton({
       try {
         await navigator.share({ title, text, url });
         return;
-      } catch (err) {
-        // User cancelled or share failed, fallback to copy/telegram
+      } catch (err: any) {
+        if (err?.name === 'AbortError') return;
+        // Share failed, fallback to Telegram share URL
       }
     }
 
