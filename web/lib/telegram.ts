@@ -44,6 +44,11 @@ export function getTelegramUser(): TelegramUser | null {
   return tg?.initDataUnsafe?.user || null;
 }
 
+export function getTelegramInitData(): string | null {
+  const tg = getTelegramWebApp();
+  return tg?.initData || null;
+}
+
 export function showMainButton(text: string, onClick: () => void) {
   const tg = getTelegramWebApp();
   if (!tg?.MainButton) return;
