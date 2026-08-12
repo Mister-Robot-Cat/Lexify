@@ -9,7 +9,7 @@ from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
 from sqlalchemy.orm import joinedload
 
-from app.database.models import UserWord, Word
+from app.database.models import User, UserWord, Word
 from app.services.word_service import word_service
 
 logger = logging.getLogger(__name__)
@@ -26,6 +26,21 @@ QUIZ_BATCH_SIZE = 10
 
 # Pagination
 LIBRARY_PAGE_SIZE = 5
+
+
+def primary_variant(translation: str) -> str:
+    """Return the first standalone variant of a translation.
+
+    Translations arrive as free text that may pack several senses into one
+    string ("1. устойчивый, 2. упорный, 3. стойкий") or spread them over
+    lines. Multiple-choice buttons need just one short, clean option.
+    """
+    first_line = translation.strip().split("\n")[0]
+    # Drop leading numbering, then cut at the next numbered sense or comma.
+    first_line = re.sub(r"^\s*\d+\.\s*", "", first_line)
+    first_line = re.split(r"(?<!\d)\d+\.\s+", first_line)[0]
+    first_line = first_line.split(",")[0]
+    return first_line.strip(" ;.-") or translation.strip()
 
 
 def _now_utc() -> datetime.datetime:
@@ -134,7 +149,15 @@ class QuizService:
         get_word_for_quiz but picks multiple unique words at once.
         """
         user = await word_service.get_or_create_user(session, telegram_id)
+        return await self.get_batch_for_user(session, user, batch_size)
 
+    async def get_batch_for_user(
+        self,
+        session: AsyncSession,
+        user: User,
+        batch_size: int = QUIZ_BATCH_SIZE,
+    ) -> list[Word]:
+        """Weighted batch selection for an already-resolved user."""
         stmt = (
             select(UserWord)
             .options(joinedload(UserWord.word))
@@ -176,7 +199,7 @@ class QuizService:
 
         logger.info(
             "Quiz batch loaded: %d words for user %d",
-            len(selected), telegram_id,
+            len(selected), user.id,
         )
         return selected
 
@@ -188,6 +211,12 @@ class QuizService:
         Returns up to `count` random translations from the user's other words.
         """
         user = await word_service.get_or_create_user(session, telegram_id)
+        return await self.get_choice_options_for_user(session, user, correct_word, count)
+
+    async def get_choice_options_for_user(
+        self, session: AsyncSession, user: User, correct_word: Word, count: int = 3
+    ) -> list[str]:
+        """Distractor translations for an already-resolved user."""
         stmt = (
             select(UserWord)
             .options(joinedload(UserWord.word))
@@ -196,14 +225,8 @@ class QuizService:
         result = await session.execute(stmt)
         other_words = result.scalars().all()
 
-        # Extract first translation line for each (keep it short for buttons)
-        translations = []
-        for uw in other_words:
-            t = uw.word.translation.split("\n")[0].strip()
-            # Strip numbering like "1. "
-            if len(t) > 3 and t[0].isdigit() and t[1] == ".":
-                t = t[2:].strip()
-            translations.append(t)
+        # Keep options short enough to fit on a button / choice card
+        translations = [primary_variant(uw.word.translation) for uw in other_words]
 
         random.shuffle(translations)
         return translations[:count]
@@ -211,12 +234,10 @@ class QuizService:
     # ─── Answer checking ──────────────────────────────────────────────────
 
     def check_answer(self, user_answer: str, correct_translation: str) -> bool:
-        """Check if the user's answer matches the correct translation.
+        """Check if the user's answer matches the correct translation."""
+        if not user_answer or not isinstance(user_answer, str):
+            return False
 
-        Uses both exact (case-insensitive) matching and fuzzy matching
-        via SequenceMatcher to allow minor typos.
-        Accepts any variant from numbered lists (1. foo 2. bar) or comma-separated.
-        """
         user_clean = user_answer.strip().lower()
 
         # Extract all variants from translation:
@@ -271,6 +292,16 @@ class QuizService:
         - Wrong:   next_review = now + 1 hour
         """
         user = await word_service.get_or_create_user(session, telegram_id)
+        return await self.record_answer_for_user(session, user, word_id, is_correct)
+
+    async def record_answer_for_user(
+        self,
+        session: AsyncSession,
+        user: User,
+        word_id: int,
+        is_correct: bool,
+    ) -> UserWord:
+        """Apply spaced repetition for an already-resolved user."""
         now = _now_utc()
 
         stmt = select(UserWord).where(
@@ -278,7 +309,9 @@ class QuizService:
             UserWord.word_id == word_id,
         )
         result = await session.execute(stmt)
-        user_word = result.scalar_one()
+        user_word = result.scalar_one_or_none()
+        if user_word is None:
+            raise ValueError(f"Word {word_id} is not in this user's library")
 
         if is_correct:
             user_word.correct_count += 1
@@ -299,7 +332,12 @@ class QuizService:
     ) -> dict[str, int]:
         """Return aggregate quiz statistics for a user."""
         user = await word_service.get_or_create_user(session, telegram_id)
+        return await self.get_stats_for_user(session, user)
 
+    async def get_stats_for_user(
+        self, session: AsyncSession, user: User
+    ) -> dict[str, int]:
+        """Aggregate quiz statistics for an already-resolved user."""
         stmt = select(UserWord).where(UserWord.user_id == user.id)
         result = await session.execute(stmt)
         user_words = result.scalars().all()
