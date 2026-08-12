@@ -59,3 +59,14 @@ export function hideMainButton() {
 
   tg.MainButton.hide();
 }
+
+export function triggerHapticFeedback(style: 'light' | 'medium' | 'heavy' = 'light') {
+  const tg = getTelegramWebApp();
+  if (tg?.HapticFeedback) {
+    try {
+      tg.HapticFeedback.impactOccurred(style);
+    } catch {
+      // Ignore if unsupported
+    }
+  }
+}
