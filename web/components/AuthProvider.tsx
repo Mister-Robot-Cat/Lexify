@@ -20,7 +20,7 @@ interface AuthContextType {
   loginWithTelegram: (initData: string) => Promise<void>
   logout: () => void
   refresh: () => Promise<void>
-  t: (key: string) => string
+  t: (key: string, params?: Record<string, string | number>) => string
 }
 
 const AuthContext = createContext<AuthContextType | undefined>(undefined)
@@ -78,7 +78,8 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
     window.location.href = '/'
   }
 
-  const t = (key: string) => translate(user?.ui_language ?? 'en', key)
+  const t = (key: string, params?: Record<string, string | number>) =>
+    translate(user?.ui_language ?? 'en', key, params)
 
   return (
     <AuthContext.Provider
