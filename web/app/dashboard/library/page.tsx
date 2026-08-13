@@ -294,8 +294,8 @@ export default function LibraryPage() {
               setFilter(f)
               setPage(1)
             }}
-            className={`rounded-full px-4 py-1.5 text-sm font-medium transition-colors ${
-              filter === f ? 'bg-primary text-white' : 'bg-white/5 text-muted-light hover:bg-white/10'
+            className={`rounded-full px-4 py-1.5 text-sm font-medium transition-all duration-200 active:scale-95 ${
+              filter === f ? 'bg-primary text-white shadow-md shadow-indigo-500/20' : 'bg-white/5 text-muted-light hover:bg-white/10'
             }`}
           >
             {filterLabels[f]}
