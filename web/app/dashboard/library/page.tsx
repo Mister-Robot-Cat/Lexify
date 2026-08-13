@@ -3,6 +3,7 @@
 import { useCallback, useEffect, useState } from 'react'
 import { motion, AnimatePresence } from 'framer-motion'
 import { Loader2, Search, Sparkles, Trash2, X } from 'lucide-react'
+import AudioButton from '@/components/AudioButton'
 import { useAuth } from '@/components/AuthProvider'
 import { api, ApiError } from '@/lib/api'
 import type { LookupResult, Word } from '@/lib/types'
@@ -148,6 +149,7 @@ function WordDetail({
           <div>
             <div className="flex items-center gap-2">
               <h3 className="text-2xl font-bold text-white">{word.word}</h3>
+              <AudioButton word={word.word} />
               <LevelBadge level={word.level} />
             </div>
             <p className="mt-1 text-accent-cyan">{word.translation}</p>
