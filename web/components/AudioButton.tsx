@@ -6,10 +6,16 @@ import { speakWord } from '@/lib/speech'
 interface AudioButtonProps {
   word: string
   lang?: string
+  iconSize?: number
   className?: string
 }
 
-export default function AudioButton({ word, lang = 'en-US', className = '' }: AudioButtonProps) {
+export default function AudioButton({
+  word,
+  lang = 'en-US',
+  iconSize = 16,
+  className = '',
+}: AudioButtonProps) {
   return (
     <button
       onClick={(e) => {
@@ -20,7 +26,7 @@ export default function AudioButton({ word, lang = 'en-US', className = '' }: Au
       aria-label={`Listen to pronunciation of ${word}`}
       className={`inline-flex items-center justify-center rounded-lg bg-white/5 p-2 text-muted-light transition-all hover:bg-white/10 hover:text-primary active:scale-95 ${className}`}
     >
-      <Volume2 size={16} />
+      <Volume2 size={iconSize} />
     </button>
   )
 }
