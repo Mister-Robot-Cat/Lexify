@@ -5,7 +5,12 @@ Calculates unlocked badges based on user stats, streaks, and library metrics.
 
 from __future__ import annotations
 
-from dataclasses import dataclass
+from dataclasses import asdict, dataclass
+
+
+def serialize_badges(badges: list[Badge]) -> list[dict]:
+    """Convert list of Badge objects to dictionary format for JSON API."""
+    return [asdict(b) for b in badges]
 
 
 @dataclass(frozen=True)
