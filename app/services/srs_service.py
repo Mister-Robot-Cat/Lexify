@@ -75,3 +75,20 @@ def calculate_sm2(
         repetitions=new_repetitions,
         next_review=next_review,
     )
+
+
+def calculate_sm2_batch(
+    records: list[dict],
+    now: datetime.datetime | None = None,
+) -> list[SRSState]:
+    """Calculate SM-2 states for a batch of review records."""
+    return [
+        calculate_sm2(
+            quality=r.get("quality", 3),
+            easiness_factor=r.get("easiness_factor", DEFAULT_EASINESS_FACTOR),
+            interval_days=r.get("interval_days", 0),
+            repetitions=r.get("repetitions", 0),
+            now=now,
+        )
+        for r in records
+    ]
