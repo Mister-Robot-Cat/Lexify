@@ -248,3 +248,68 @@ class ShadowingBookmark(Base):
 
     def __repr__(self) -> str:
         return f"<ShadowingBookmark(user_id={self.user_id}, video_id={self.video_id})>"
+
+
+class Collocation(Base):
+    """A collocation phrase manually saved by a user — no AI involved.
+
+    The user supplies the phrase (and optionally its translation) verbatim;
+    this is a personal notebook, not an AI-generated dictionary. Shared
+    globally by (phrase, learning_language) purely so the same phrase saved by
+    two different users doesn't duplicate storage — content always comes from
+    the user, never generated.
+    """
+    __tablename__ = "collocations"
+    __table_args__ = (
+        UniqueConstraint("phrase", "learning_language", name="uq_collocation_phrase_lang"),
+    )
+
+    id: Mapped[int] = mapped_column(Integer, primary_key=True, autoincrement=True)
+    phrase: Mapped[str] = mapped_column(String(255), nullable=False)
+    # No server_default: MySQL rejects literal DEFAULTs on TEXT/BLOB columns.
+    # The app always supplies a value (empty string when no translation given).
+    translation: Mapped[str] = mapped_column(Text, nullable=False, default="")
+    language: Mapped[str] = mapped_column(String(20), nullable=False, server_default="Russian")
+    learning_language: Mapped[str] = mapped_column(String(20), nullable=False, server_default="English")
+    created_at: Mapped[datetime.datetime] = mapped_column(
+        DateTime, server_default=func.now(), nullable=False
+    )
+
+    def __repr__(self) -> str:
+        return f"<Collocation(id={self.id}, phrase='{self.phrase}')>"
+
+
+class UserCollocation(Base):
+    """Per-user saved collocation with spaced-repetition review stats.
+
+    Mirrors UserWord exactly, so the same review-scheduling logic (and the
+    same weighted quiz-selection approach) applies to both.
+    """
+    __tablename__ = "user_collocations"
+    __table_args__ = (
+        UniqueConstraint("user_id", "collocation_id", name="uq_user_collocation"),
+    )
+
+    id: Mapped[int] = mapped_column(Integer, primary_key=True, autoincrement=True)
+    user_id: Mapped[int] = mapped_column(
+        Integer, ForeignKey("users.id", ondelete="CASCADE"), nullable=False, index=True
+    )
+    collocation_id: Mapped[int] = mapped_column(
+        Integer, ForeignKey("collocations.id", ondelete="CASCADE"), nullable=False, index=True
+    )
+    correct_count: Mapped[int] = mapped_column(Integer, default=0, nullable=False)
+    wrong_count: Mapped[int] = mapped_column(Integer, default=0, nullable=False)
+    next_review: Mapped[datetime.datetime] = mapped_column(
+        DateTime, server_default=func.now(), nullable=False, index=True
+    )
+    created_at: Mapped[datetime.datetime] = mapped_column(
+        DateTime, server_default=func.now(), nullable=False
+    )
+
+    collocation: Mapped["Collocation"] = relationship("Collocation", lazy="joined")
+
+    def __repr__(self) -> str:
+        return (
+            f"<UserCollocation(user_id={self.user_id}, collocation_id={self.collocation_id}, "
+            f"correct={self.correct_count}, wrong={self.wrong_count})>"
+        )

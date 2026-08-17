@@ -38,11 +38,13 @@ async def get_session() -> AsyncGenerator[AsyncSession, None]:
 
 
 async def init_db() -> None:
-    """Create all tables defined in the ORM models."""
+    """Create all tables defined in the ORM models and reconcile columns."""
     from app.database.models import Base
+    from app.database.schema_sync import sync_schema
 
     async with engine.begin() as conn:
         await conn.run_sync(Base.metadata.create_all)
+        await sync_schema(conn)
     logger.info("Database tables initialized.")
 
 

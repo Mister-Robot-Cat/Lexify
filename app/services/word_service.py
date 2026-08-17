@@ -118,6 +118,89 @@ class WordService:
                 logger.warning("Word processing failed for user %d: %s", telegram_id, str(e))
                 raise ValueError(f"Word processing failed: {str(e)}")
 
+    async def process_word_for_user(
+        self, session: AsyncSession, user: User, text: str
+    ) -> tuple[Word | ReverseTranslation, bool]:
+        """Same flow as :meth:`process_word` but for an already-resolved user.
+
+        Used by the web API, where users are identified by their internal id
+        rather than a Telegram id.
+        """
+        text = (text or "").strip()
+        if not text:
+            raise ValueError("Empty text provided")
+        if len(text) > 500:
+            raise ValueError("Text too long (maximum 500 characters)")
+
+        lang_type = self._detect_language(text, user.language, user.learning_language)
+
+        if lang_type == "native":
+            try:
+                reverse_result = await groq_service.reverse_translate(
+                    text,
+                    language=user.language,
+                    learning_language=user.learning_language,
+                )
+                return reverse_result, False
+            except Exception as e:
+                logger.warning("Reverse translation failed for user %d: %s", user.id, str(e))
+                raise ValueError(f"Translation failed: {str(e)}")
+
+        try:
+            word = await self.find_word(session, text, language=user.language)
+            if word is None:
+                explanation = await groq_service.explain_word(
+                    text,
+                    language=user.language,
+                    learning_language=user.learning_language,
+                )
+                word = await self.create_word(session, explanation, language=user.language)
+            _, created = await self.link_word_to_user(session, user, word)
+            return word, created
+        except Exception as e:
+            logger.warning("Word processing failed for user %d: %s", user.id, str(e))
+            raise ValueError(f"Word processing failed: {str(e)}")
+
+    async def add_word_text_for_user(
+        self, session: AsyncSession, user: User, text: str
+    ) -> tuple[Word, bool]:
+        """Force the forward (learning-language) flow and link the word to the user.
+
+        Unlike :meth:`process_word_for_user` this never returns a reverse
+        translation — it is used when the target word is already known to be in
+        the learning language (topic packs, "save this translation" actions).
+        """
+        text = (text or "").strip()
+        if not text:
+            raise ValueError("Empty text provided")
+
+        word = await self.find_word(session, text, language=user.language)
+        if word is None:
+            explanation = await groq_service.explain_word(
+                text,
+                language=user.language,
+                learning_language=user.learning_language,
+            )
+            word = await self.create_word(session, explanation, language=user.language)
+        _, created = await self.link_word_to_user(session, user, word)
+        return word, created
+
+    async def delete_word_for_user(
+        self, session: AsyncSession, user: User, word_id: int
+    ) -> bool:
+        """Remove a word from a user's library by word id. True if removed."""
+        stmt = select(UserWord).where(
+            UserWord.user_id == user.id, UserWord.word_id == word_id
+        )
+        result = await session.execute(stmt)
+        user_word = result.scalar_one_or_none()
+        if user_word is None:
+            return False
+        await session.delete(user_word)
+        await session.flush()
+        logger.info("Deleted word_id=%d from user %d", word_id, user.id)
+        return True
+
     async def set_user_language(
         self, session: AsyncSession, telegram_id: int, language: str
     ) -> User:
