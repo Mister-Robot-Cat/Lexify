@@ -24,6 +24,7 @@ class Section(str, Enum):
     WORDS = "words"            # Word lookup / translation
     GRAMMAR = "grammar"        # Grammar chatbot (/ask)
     IELTS = "ielts"            # IELTS writing evaluation (/ielts)
+    COLLOCATIONS = "collocations"  # Collocations lookup (/collocations)
     QUIZ = "quiz"              # Quiz mode — text messages are quiz answers only
 
 

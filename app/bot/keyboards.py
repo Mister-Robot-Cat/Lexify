@@ -24,6 +24,13 @@ WORD_LIBRARY = "word_library"
 WORD_DELETE = "word_delete"
 WORD_MORE = "word_more"
 
+# Collocations — a manually-saved personal library, practiced with
+# self-graded flashcards (no AI, no automatic answer checking)
+COLLOC_QUIZ_SKIP = "cquiz_skip"
+COLLOC_LIBRARY_PAGE = "colloc_lib_page"
+COLLOC_REVEAL = "colloc_reveal"
+COLLOC_GRADE = "colloc_grade"
+
 
 def quiz_mode_keyboard(
     label_classic: str = "🔤 Word → Translation",
@@ -177,6 +184,9 @@ def section_menu_keyboard() -> InlineKeyboardMarkup:
             InlineKeyboardButton("📝 IELTS Writing", callback_data=f"{SECTION_SELECT}:ielts"),
             InlineKeyboardButton("🎯 Quiz", callback_data=f"{SECTION_SELECT}:quiz"),
         ],
+        [
+            InlineKeyboardButton("🔗 Collocations", callback_data=f"{SECTION_SELECT}:collocations"),
+        ],
     ])
 
 
@@ -201,3 +211,40 @@ def word_actions_keyboard(word_id: int) -> InlineKeyboardMarkup:
 def cancel_keyboard(label: str = "❌ Cancel") -> InlineKeyboardMarkup:
     """Inline keyboard with a cancel button for active flow cancellation."""
     return InlineKeyboardMarkup([[InlineKeyboardButton(label, callback_data="quiz_cancel")]])
+
+
+# ─── Collocations ─────────────────────────────────────────────────────────────
+
+def colloc_front_keyboard(
+    reveal_label: str = "👁 Show answer", skip_label: str = "⏭ Skip"
+) -> InlineKeyboardMarkup:
+    """Inline keyboard shown for the front of a collocation flashcard."""
+    return InlineKeyboardMarkup([
+        [InlineKeyboardButton(reveal_label, callback_data=COLLOC_REVEAL)],
+        [InlineKeyboardButton(skip_label, callback_data=COLLOC_QUIZ_SKIP)],
+    ])
+
+
+def colloc_grade_keyboard(
+    label_knew: str = "✅ I knew it", label_forgot: str = "❌ I forgot it"
+) -> InlineKeyboardMarkup:
+    """Inline keyboard shown after revealing the answer — user self-grades."""
+    return InlineKeyboardMarkup([
+        [InlineKeyboardButton(label_knew, callback_data=f"{COLLOC_GRADE}:1")],
+        [InlineKeyboardButton(label_forgot, callback_data=f"{COLLOC_GRADE}:0")],
+    ])
+
+
+def colloc_library_pagination_keyboard(page: int, total_pages: int) -> InlineKeyboardMarkup | None:
+    """Inline keyboard for /mycollocations pagination. Returns None if only 1 page."""
+    if total_pages <= 1:
+        return None
+
+    buttons: list[InlineKeyboardButton] = []
+    if page > 0:
+        buttons.append(InlineKeyboardButton("◀️ Prev", callback_data=f"{COLLOC_LIBRARY_PAGE}:{page - 1}"))
+    buttons.append(InlineKeyboardButton(f"{page + 1}/{total_pages}", callback_data="noop"))
+    if page < total_pages - 1:
+        buttons.append(InlineKeyboardButton("Next ▶️", callback_data=f"{COLLOC_LIBRARY_PAGE}:{page + 1}"))
+
+    return InlineKeyboardMarkup([buttons])

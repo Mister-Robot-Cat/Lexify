@@ -15,6 +15,7 @@ from app.bot.reminders import daily_review_reminder, word_of_the_day
 from app.config import settings
 from app.database.session import close_db, init_db
 from app.api.router import api_router
+from app.services.cache_service import cache_service
 
 # ─── Logging ──────────────────────────────────────────────────────────────────
 
@@ -26,6 +27,21 @@ logging.basicConfig(
 logger = logging.getLogger(__name__)
 
 # ─── Telegram Application (built once, shared) ───────────────────────────────
+
+if not settings.telegram_bot_token:
+    raise ValueError(
+        "TELEGRAM_BOT_TOKEN must be set to run the bot. "
+        "To serve only the website API, run `python -m app.web` instead."
+    )
+
+if settings.jwt_secret == "supersecretkeyforjwt":
+    logger.warning(
+        "JWT_SECRET is using the hardcoded default value. This process also "
+        "serves the web API (/api/*) on the same port — anyone can forge a "
+        "valid auth token for ANY user (read their words, IELTS essays, chat "
+        "history) using this well-known secret. Set JWT_SECRET in .env before "
+        "exposing this bot's port publicly."
+    )
 
 bot_request = HTTPXRequest(
     proxy_url=settings.telegram_proxy_url if settings.telegram_proxy_url else None,
@@ -66,6 +82,9 @@ async def lifespan(app: FastAPI):
                 BotCommand("ask", "❓ Grammar chatbot (new chat)"),
                 BotCommand("clear", "🗑 Clear grammar chat history"),
                 BotCommand("ielts", "📝 IELTS writing evaluation"),
+                BotCommand("collocations", "🔗 Save a collocation to your library"),
+                BotCommand("collocquiz", "🃏 Practice saved collocations"),
+                BotCommand("mycollocations", "📚 View saved collocations"),
                 BotCommand("language", "🌍 Choose translation language"),
                 BotCommand("learning", "📖 Choose language to learn"),
                 BotCommand("ui", "🖥 Bot interface language"),
@@ -102,8 +121,18 @@ async def lifespan(app: FastAPI):
     if settings.bot_mode == "webhook":
         if not settings.webhook_url:
             raise ValueError("WEBHOOK_URL must be set when BOT_MODE=webhook")
+        if not settings.webhook_secret:
+            logger.warning(
+                "WEBHOOK_SECRET is not set. The /webhook endpoint will accept "
+                "unauthenticated requests — anyone who finds the URL can send "
+                "forged updates impersonating any Telegram user. Set WEBHOOK_SECRET "
+                "before running this in production."
+            )
         webhook_path = f"{settings.webhook_url}/webhook"
-        await bot_app.bot.set_webhook(url=webhook_path)
+        await bot_app.bot.set_webhook(
+            url=webhook_path,
+            secret_token=settings.webhook_secret or None,
+        )
         logger.info("Webhook set to %s", webhook_path)
         await bot_app.start()
     else:
@@ -121,6 +150,7 @@ async def lifespan(app: FastAPI):
     await bot_app.stop()
     await bot_app.shutdown()
     await close_db()
+    await cache_service.close()
     logger.info("Shutdown complete.")
 
 
@@ -134,7 +164,7 @@ app = FastAPI(
 
 app.add_middleware(
     CORSMiddleware,
-    allow_origins=["*"],  # For dev, update in production
+    allow_origins=settings.cors_origins_list,
     allow_credentials=True,
     allow_methods=["*"],
     allow_headers=["*"],
@@ -145,7 +175,18 @@ app.include_router(api_router, prefix="/api")
 
 @app.post("/webhook")
 async def telegram_webhook(request: Request) -> Response:
-    """Receive Telegram updates via webhook (production mode)."""
+    """Receive Telegram updates via webhook (production mode).
+
+    Verifies Telegram's secret-token header when WEBHOOK_SECRET is configured,
+    so this endpoint can't be used to inject forged updates (e.g. impersonating
+    another user's telegram_id) by anyone who guesses or discovers the URL.
+    """
+    if settings.webhook_secret:
+        provided = request.headers.get("X-Telegram-Bot-Api-Secret-Token")
+        if provided != settings.webhook_secret:
+            logger.warning("Rejected /webhook request with invalid secret token")
+            return Response(status_code=401)
+
     data = await request.json()
     update = Update.de_json(data, bot_app.bot)
     await bot_app.process_update(update)

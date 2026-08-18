@@ -59,6 +59,16 @@ _STRINGS: dict[str, dict[str, str]] = {
         "ru": "🔄 На повторение: <b>{count}</b>",
         "az": "🔄 Təkrar üçün: <b>{count}</b>",
     },
+    "progress_collocations": {
+        "en": "🔗 Collocations saved: <b>{count}</b>",
+        "ru": "🔗 Сохранено словосочетаний: <b>{count}</b>",
+        "az": "🔗 Saxlanılan söz birləşmələri: <b>{count}</b>",
+    },
+    "progress_collocations_due": {
+        "en": "🔄 Collocations due for review: <b>{count}</b>",
+        "ru": "🔄 Словосочетаний на повторение: <b>{count}</b>",
+        "az": "🔄 Təkrar üçün söz birləşmələri: <b>{count}</b>",
+    },
 
     # /library
     "library_title": {
@@ -207,6 +217,102 @@ _STRINGS: dict[str, dict[str, str]] = {
         "en": "❌ Evaluation service unavailable. Please try later.",
         "ru": "❌ Сервис оценки недоступен. Попробуйте позже.",
         "az": "❌ Qiymətləndirmə xidməti mövcud deyil. Zəhmət olmasa sonra cəhd edin.",
+    },
+
+    # /collocations — manual save, no AI
+    "collocations_word_too_long": {
+        "en": "⚠️ That's too long — send up to 2000 characters (one collocation per line is fine).",
+        "ru": "⚠️ Слишком длинно — отправь до 2000 символов (можно по одному словосочетанию на строку).",
+        "az": "⚠️ Çox uzundur — maksimum 2000 simvol göndər (hər sətirdə bir söz birləşməsi olsun).",
+    },
+    "collocations_error": {
+        "en": "⚠️ Couldn't find anything to save in that message.",
+        "ru": "⚠️ Не удалось найти, что сохранить в этом сообщении.",
+        "az": "⚠️ Bu mesajda saxlanacaq bir şey tapılmadı.",
+    },
+    "colloc_saved": {
+        "en": "✅ Saved <b>{count}</b> new collocation(s) to your library.\nPractice them anytime with /collocquiz or view them with /mycollocations.",
+        "ru": "✅ Сохранено <b>{count}</b> новых словосочетаний.\nТренируй их через /collocquiz или смотри в /mycollocations.",
+        "az": "✅ <b>{count}</b> yeni söz birləşməsi yadda saxlanıldı.\n/collocquiz ilə məşq et və ya /mycollocations ilə bax.",
+    },
+    "colloc_already_saved": {
+        "en": "📚 These are already in your library. Practice them with /collocquiz.",
+        "ru": "📚 Они уже есть в твоей библиотеке. Тренируй их через /collocquiz.",
+        "az": "📚 Bunlar artıq kitabxanandadır. /collocquiz ilə məşq et.",
+    },
+    "colloc_saved_mixed": {
+        "en": "✅ Saved <b>{added}</b> new, <b>{already}</b> already in your library.",
+        "ru": "✅ Сохранено новых: <b>{added}</b>, уже было: <b>{already}</b>.",
+        "az": "✅ Yeni saxlanıldı: <b>{added}</b>, artıq var idi: <b>{already}</b>.",
+    },
+
+    # /mycollocations
+    "mycolloc_title": {
+        "en": "🔗 <b>Your Collocations</b> ({count})",
+        "ru": "🔗 <b>Твои словосочетания</b> ({count})",
+        "az": "🔗 <b>Söz birləşmələrin</b> ({count})",
+    },
+    "mycolloc_empty": {
+        "en": "📭 You haven't saved any collocations yet.\nUse /collocations to add some — just send a phrase, optionally with its translation.",
+        "ru": "📭 У тебя пока нет сохранённых словосочетаний.\nИспользуй /collocations, чтобы добавить — просто отправь фразу, можно с переводом.",
+        "az": "📭 Hələ heç bir söz birləşməsi saxlamamısan.\n/collocations ilə əlavə et — sadəcə ifadəni, istəsən tərcüməsi ilə göndər.",
+    },
+    "mycolloc_no_translation": {
+        "en": "<i>(no translation saved)</i>",
+        "ru": "<i>(перевод не сохранён)</i>",
+        "az": "<i>(tərcümə saxlanmayıb)</i>",
+    },
+
+    # /collocquiz — self-graded flashcards, no automatic checking
+    "cquiz_no_collocations": {
+        "en": "📭 You don't have any saved collocations yet. Use /collocations to add some first!",
+        "ru": "📭 У тебя пока нет сохранённых словосочетаний. Сначала добавь их через /collocations!",
+        "az": "📭 Hələ saxlanmış söz birləşmən yoxdur. Əvvəlcə /collocations ilə əlavə et!",
+    },
+    "cquiz_finished": {
+        "en": "🏁 <b>Practice finished!</b> You've gone through all your collocations.",
+        "ru": "🏁 <b>Практика завершена!</b> Ты прошёл все словосочетания.",
+        "az": "🏁 <b>Məşq bitdi!</b> Bütün söz birləşmələrini keçdin.",
+    },
+    "cquiz_batch_start": {
+        "en": "📦 <b>{count} collocations to review.</b>\nTry to recall each one before revealing the answer.",
+        "ru": "📦 <b>{count} словосочетаний на повторение.</b>\nПостарайся вспомнить каждое перед тем, как открыть ответ.",
+        "az": "📦 <b>Təkrar üçün {count} söz birləşməsi.</b>\nCavabı açmadan əvvəl hər birini xatırlamağa çalış.",
+    },
+    "cquiz_batch_repeat": {
+        "en": "🔁 <b>{mistakes} to review again.</b>\nLet's go through them once more.",
+        "ru": "🔁 <b>{mistakes} на повторный разбор.</b>\nПройдём их ещё раз.",
+        "az": "🔁 <b>{mistakes} yenidən nəzərdən keçirilməlidir.</b>\nBir daha keçək.",
+    },
+    "cquiz_batch_complete": {
+        "en": "🎉 <b>Nice work!</b> You reviewed all {count}.\nLoading next set...",
+        "ru": "🎉 <b>Отлично!</b> Ты повторил все {count}.\nЗагружаю следующий набор...",
+        "az": "🎉 <b>Əla!</b> Bütün {count}-ni təkrarladın.\nNövbəti dəst yüklənir...",
+    },
+    "cquiz_batch_progress": {
+        "en": "📊 Card <b>{current}</b> of <b>{total}</b>",
+        "ru": "📊 Карточка <b>{current}</b> из <b>{total}</b>",
+        "az": "📊 <b>{total}</b>-dan <b>{current}</b>-cı kart",
+    },
+    "cquiz_card_front": {
+        "en": "🔗 <b>{phrase}</b>\n\nDo you remember what this means? Tap to reveal.",
+        "ru": "🔗 <b>{phrase}</b>\n\nПомнишь, что это значит? Нажми, чтобы открыть.",
+        "az": "🔗 <b>{phrase}</b>\n\nBunun nə demək olduğunu xatırlayırsan? Açmaq üçün toxun.",
+    },
+    "cquiz_card_back": {
+        "en": "🔗 <b>{phrase}</b>\n💡 {translation}\n\nDid you know it?",
+        "ru": "🔗 <b>{phrase}</b>\n💡 {translation}\n\nТы это знал?",
+        "az": "🔗 <b>{phrase}</b>\n💡 {translation}\n\nBunu bilirdin?",
+    },
+    "cquiz_knew_it": {
+        "en": "✅ <b>Great!</b>",
+        "ru": "✅ <b>Отлично!</b>",
+        "az": "✅ <b>Əla!</b>",
+    },
+    "cquiz_forgot_it": {
+        "en": "📌 <b>No worries — we'll review it again soon.</b>",
+        "ru": "📌 <b>Не страшно — скоро повторим ещё раз.</b>",
+        "az": "📌 <b>Problem deyil — tezliklə yenə təkrarlayacağıq.</b>",
     },
 
     # /ask
@@ -500,6 +606,11 @@ _STRINGS: dict[str, dict[str, str]] = {
         "en": "📝 <b>IELTS Writing</b> mode active.\n\nSend me your essay or text — I'll evaluate it by IELTS criteria.\nType /menu to switch sections.",
         "ru": "📝 Режим <b>IELTS Writing</b> активен.\n\nОтправь мне эссе или текст — я оценю по критериям IELTS.\nНабери /menu для смены раздела.",
         "az": "📝 <b>IELTS Writing</b> rejimi aktivdir.\n\nMənə esse və ya mətn göndər — IELTS meyarlarına görə qiymətləndirəcəm.\nBölmə dəyişmək üçün /menu yaz.",
+    },
+    "section_collocations_active": {
+        "en": "🔗 <b>Collocations</b> mode active.\n\nSend me a collocation you want to remember, optionally with its translation:\n<code>make a decision - принять решение</code>\nOr just the phrase alone. You can paste several, one per line. Practice saved ones with /collocquiz.\nType /menu to switch sections.",
+        "ru": "🔗 Режим <b>Словосочетаний</b> активен.\n\nОтправь словосочетание, которое хочешь запомнить, можно с переводом:\n<code>make a decision - принять решение</code>\nИли просто фразу. Можно вставить несколько — по одной на строку. Тренируй сохранённые через /collocquiz.\nНабери /menu для смены раздела.",
+        "az": "🔗 <b>Söz birləşmələri</b> rejimi aktivdir.\n\nYadda saxlamaq istədiyin söz birləşməsini göndər, istəsən tərcüməsi ilə:\n<code>make a decision - qərar vermək</code>\nVə ya sadəcə ifadəni. Bir neçəsini — hər sətirdə biri — əlavə edə bilərsən. /collocquiz ilə məşq et.\nBölmə dəyişmək üçün /menu yaz.",
     },
     "no_section": {
         "en": "🤔 Please choose a section first! Use /menu or tap a button below.",

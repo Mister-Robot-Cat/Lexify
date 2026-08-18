@@ -17,6 +17,10 @@ from sqlalchemy import select, delete
 
 from app.bot.i18n_simple import get_translator, UI_LANGUAGES
 from app.bot.keyboards import (
+    COLLOC_GRADE,
+    COLLOC_LIBRARY_PAGE,
+    COLLOC_QUIZ_SKIP,
+    COLLOC_REVEAL,
     LANGUAGES,
     LEARNING_LANGUAGES,
     LIBRARY_PAGE,
@@ -26,7 +30,6 @@ from app.bot.keyboards import (
     QUIZ_CHOICE,
     QUIZ_MODE,
     QUIZ_SKIP,
-    QUIZ_START,
     SECTION_SELECT,
     SET_LANG,
     SET_LEARN,
@@ -36,10 +39,12 @@ from app.bot.keyboards import (
     WORD_LIBRARY,
     WORD_MORE,
     WORD_QUIZ,
+    colloc_front_keyboard,
+    colloc_grade_keyboard,
+    colloc_library_pagination_keyboard,
     language_keyboard,
     learning_language_keyboard,
     library_pagination_keyboard,
-    main_menu_keyboard,
     quiz_action_keyboard,
     quiz_choices_keyboard,
     quiz_mode_keyboard,
@@ -55,24 +60,36 @@ from app.bot.user_state import (
 )
 from app.database.models import Word
 from app.database.session import async_session_factory
-from app.services.groq_service import WordExplanation, ReverseTranslation
+from app.services.groq_service import ReverseTranslation
 from app.services.ask_service import ask_service
 from app.services.ielts_service import ielts_service
-from app.services.quiz_service import quiz_service, QUIZ_BATCH_SIZE
+from app.services.collocation_library_service import collocation_library_service
+from app.services.quiz_service import quiz_service
 from app.services.word_service import word_service
 
 logger = logging.getLogger(__name__)
 
 # ConversationHandler states
 AWAITING_ANSWER = 1
+AWAITING_COLLOC_ANSWER = 1  # distinct ConversationHandler instance — value reuse is safe
 
 
 # ─── Helper ──────────────────────────────────────────────────────────────────
 
 async def _get_ui_lang(telegram_id: int) -> str:
-    """Fetch the user's UI language code from the DB."""
+    """Fetch the user's UI language code from the DB.
+
+    This is called at the top of nearly every handler and can implicitly
+    create a new User row (via get_or_create_user) for a first-time sender.
+    Without an explicit commit, that new row was silently discarded when the
+    session closed — the next handler in the same update would just recreate
+    it, but any handler that stopped here (e.g. plain read-only commands)
+    never persisted the user at all.
+    """
     async with async_session_factory() as session:
-        return await word_service.get_ui_language(session, telegram_id)
+        ui_lang = await word_service.get_ui_language(session, telegram_id)
+        await session.commit()
+        return ui_lang
 
 
 def _h(text: str) -> str:
@@ -144,6 +161,7 @@ async def progress_handler(update: Update, context: ContextTypes.DEFAULT_TYPE) -
 
     async with async_session_factory() as session:
         stats = await quiz_service.get_user_stats(session, user.id)
+        colloc_stats = await collocation_library_service.get_user_stats(session, user.id)
         await session.commit()
 
     accuracy = 0
@@ -158,6 +176,13 @@ async def progress_handler(update: Update, context: ContextTypes.DEFAULT_TYPE) -
         f"{t('progress_accuracy', pct=str(accuracy))}\n"
         f"{t('progress_due', count=str(stats['due_for_review']))}"
     )
+
+    if colloc_stats["total_collocations"] > 0:
+        text += (
+            f"\n\n{t('progress_collocations', count=str(colloc_stats['total_collocations']))}\n"
+            f"{t('progress_collocations_due', count=str(colloc_stats['due_for_review']))}"
+        )
+
     await update.message.reply_text(text, parse_mode=ParseMode.HTML)
 
 
@@ -210,13 +235,70 @@ async def _send_library_page(
 
     for i, (word, uw) in enumerate(lib_page.items, start=page * 5 + 1):
         lines.append(
-            f"<b>{i}. {word.word}</b>\n"
-            f"    🌐 {word.translation}\n"
-            f"    💬 <i>{word.example}</i>"
+            f"<b>{i}. {_h(word.word)}</b>\n"
+            f"    🌐 {_h(word.translation)}\n"
+            f"    💬 <i>{_h(word.example)}</i>"
         )
 
     text = "\n\n".join(lines)
     keyboard = library_pagination_keyboard(lib_page.page, lib_page.total_pages)
+
+    if edit:
+        await message.edit_text(text, parse_mode=ParseMode.HTML, reply_markup=keyboard)
+    else:
+        await message.reply_text(text, parse_mode=ParseMode.HTML, reply_markup=keyboard)
+
+
+# ─── /mycollocations ────────────────────────────────────────────────────────
+
+async def mycollocations_handler(update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
+    """Handle /mycollocations — show paginated saved collocations."""
+    user = update.effective_user
+    logger.info("/mycollocations from user %s (id=%d)", user.username, user.id)
+    ui_lang = await _get_ui_lang(user.id)
+    await _send_colloc_library_page(update.message, user.id, page=0, ui_lang=ui_lang)
+
+
+async def colloc_library_page_callback(update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
+    """Handle /mycollocations pagination button presses."""
+    query = update.callback_query
+    await query.answer()
+
+    try:
+        page = int(query.data.split(":")[1])
+    except (IndexError, ValueError):
+        page = 0
+
+    user = update.effective_user
+    ui_lang = await _get_ui_lang(user.id)
+    await _send_colloc_library_page(query.message, user.id, page=page, edit=True, ui_lang=ui_lang)
+
+
+async def _send_colloc_library_page(
+    message, telegram_id: int, page: int = 0, edit: bool = False, ui_lang: str = "en"
+) -> None:
+    """Fetch and send a page of saved collocations (new message or edit existing)."""
+    t = get_translator(ui_lang)
+
+    async with async_session_factory() as session:
+        lib_page = await collocation_library_service.get_library_page(session, telegram_id, page)
+        await session.commit()
+
+    if lib_page.total_items == 0:
+        text = t("mycolloc_empty")
+        if edit:
+            await message.edit_text(text, parse_mode=ParseMode.HTML)
+        else:
+            await message.reply_text(text, parse_mode=ParseMode.HTML)
+        return
+
+    lines = [t("mycolloc_title", count=str(lib_page.total_items)) + "\n"]
+    for i, (coll, link) in enumerate(lib_page.items, start=page * 5 + 1):
+        translation = f"🌐 {_h(coll.translation)}" if coll.translation else t("mycolloc_no_translation")
+        lines.append(f"<b>{i}. {_h(coll.phrase)}</b>\n    {translation}")
+
+    text = "\n\n".join(lines)
+    keyboard = colloc_library_pagination_keyboard(lib_page.page, lib_page.total_pages)
 
     if edit:
         await message.edit_text(text, parse_mode=ParseMode.HTML, reply_markup=keyboard)
@@ -235,6 +317,7 @@ async def language_handler(update: Update, context: ContextTypes.DEFAULT_TYPE) -
         db_user = await word_service.get_or_create_user(session, user.id)
         current_lang = db_user.language
         ui_lang = db_user.ui_language
+        await session.commit()
 
     t = get_translator(ui_lang)
     await update.message.reply_text(
@@ -336,6 +419,9 @@ async def section_callback(update: Update, context: ContextTypes.DEFAULT_TYPE) -
     elif chosen == "ielts":
         set_section(user.id, Section.IELTS)
         await query.edit_message_text(t("section_ielts_active"), parse_mode=ParseMode.HTML)
+    elif chosen == "collocations":
+        set_section(user.id, Section.COLLOCATIONS)
+        await query.edit_message_text(t("section_collocations_active"), parse_mode=ParseMode.HTML)
     elif chosen == "quiz":
         set_section(user.id, Section.QUIZ)  # Quiz section blocks translation handler
         await _quiz_mode_menu(user.id, query.message.reply_text)
@@ -413,6 +499,7 @@ async def _handle_grammar_section(update: Update, context: ContextTypes.DEFAULT_
             db_user = await word_service.get_or_create_user(session, user.id)
             native_lang = db_user.language
             learning_lang = db_user.learning_language
+            await session.commit()
 
         # Get conversation history for this user
         history = get_chat_history(user.id)
@@ -487,6 +574,45 @@ async def _handle_ielts_section(update: Update, context: ContextTypes.DEFAULT_TY
         await update.message.reply_text(t("ielts_fatal"))
 
 
+async def _handle_collocations_section(update: Update, context: ContextTypes.DEFAULT_TYPE, text: str, t) -> None:
+    """Process text in the Collocations section — pure manual save, no AI.
+
+    Accepts "phrase - translation" (translation optional) and supports
+    pasting several collocations at once, one per line.
+    """
+    user = update.effective_user
+
+    if len(text) > 2000:
+        await update.message.reply_text(t("collocations_word_too_long"))
+        return
+
+    entries = collocation_library_service.parse_manual_entries(text)
+    if not entries:
+        await update.message.reply_text(t("collocations_error"))
+        return
+
+    logger.info("[COLLOCATIONS] user %d: saving %d entr(y/ies)", user.id, len(entries))
+
+    async with async_session_factory() as session:
+        db_user = await word_service.get_or_create_user(session, user.id)
+        native_lang = db_user.language
+        learning_lang = db_user.learning_language
+
+        added, already = await collocation_library_service.save_manual_batch(
+            session, user.id, entries, native_lang, learning_lang
+        )
+        await session.commit()
+
+    if added and already:
+        await update.message.reply_text(
+            t("colloc_saved_mixed", added=str(added), already=str(already)), parse_mode=ParseMode.HTML
+        )
+    elif added:
+        await update.message.reply_text(t("colloc_saved", count=str(added)), parse_mode=ParseMode.HTML)
+    else:
+        await update.message.reply_text(t("colloc_already_saved"))
+
+
 # ─── Text router (routes messages based on user's current section) ───────────
 
 async def text_router(update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
@@ -525,6 +651,8 @@ async def text_router(update: Update, context: ContextTypes.DEFAULT_TYPE) -> Non
         await _handle_grammar_section(update, context, text, t)
     elif section == Section.IELTS:
         await _handle_ielts_section(update, context, text, t)
+    elif section == Section.COLLOCATIONS:
+        await _handle_collocations_section(update, context, text, t)
     else:
         # No section selected — prompt user to choose
         await update.message.reply_text(
@@ -588,6 +716,7 @@ async def quiz_mode_handler(update: Update, context: ContextTypes.DEFAULT_TYPE) 
     # Load batch of words
     async with async_session_factory() as session:
         words = await quiz_service.get_batch_for_quiz(session, user.id)
+        await session.commit()
 
     if not words:
         clear_section(user.id)
@@ -802,6 +931,7 @@ async def _send_batch_question(update: Update, context: ContextTypes.DEFAULT_TYP
             wrong_options = await quiz_service.get_choice_options(
                 session, user.id, word_obj, count=3
             )
+            await session.commit()
         options = [short_translation] + wrong_options
         _random.shuffle(options)
         correct_index = options.index(short_translation)
@@ -859,6 +989,7 @@ async def _handle_batch_progress(update: Update, context: ContextTypes.DEFAULT_T
 
     async with async_session_factory() as session:
         words = await quiz_service.get_batch_for_quiz(session, user.id)
+        await session.commit()
 
     if not words:
         clear_section(user.id)
@@ -899,6 +1030,238 @@ async def quiz_cancel_handler(update: Update, context: ContextTypes.DEFAULT_TYPE
     user = update.effective_user
     _clear_quiz_data(context)
     # CRITICAL: Clear QUIZ section to re-enable translation handler
+    clear_section(user.id)
+    ui_lang = await _get_ui_lang(user.id)
+    t = get_translator(ui_lang)
+    reply_func = (
+        update.callback_query.message.reply_text
+        if update.callback_query
+        else update.message.reply_text
+    )
+    await reply_func(t("quiz_ended"))
+    return ConversationHandler.END
+
+
+# ─── /collocquiz — Self-graded flashcard practice, no AI ──────────────────────
+# Same batch/mistake-repeat architecture as /quiz (context.user_data-driven,
+# a ConversationHandler with one AWAITING_COLLOC_ANSWER state), but grading is
+# entirely manual: the card's front is shown, the user taps to reveal the
+# back, then reports for themselves whether they knew it. There is no typed
+# answer and nothing is auto-checked — by design, per the user's request.
+
+def _clear_colloc_quiz_data(context: ContextTypes.DEFAULT_TYPE) -> None:
+    """Remove all collocation-quiz-related keys from user_data."""
+    for key in ("colloc_quiz_card", "colloc_quiz_batch", "colloc_quiz_index", "colloc_quiz_mistakes"):
+        context.user_data.pop(key, None)
+
+
+def _colloc_links_to_batch(links) -> list[dict]:
+    return [
+        {"collocation_id": link.collocation.id, "phrase": link.collocation.phrase,
+         "translation": link.collocation.translation}
+        for link in links
+    ]
+
+
+async def colloc_quiz_command_handler(update: Update, context: ContextTypes.DEFAULT_TYPE) -> int:
+    """Handle /collocquiz — load a batch and start self-graded review."""
+    user = update.effective_user
+    set_section(user.id, Section.QUIZ)
+    ui_lang = await _get_ui_lang(user.id)
+    t = get_translator(ui_lang)
+
+    async with async_session_factory() as session:
+        links = await collocation_library_service.get_batch_for_quiz(session, user.id)
+        await session.commit()
+
+    if not links:
+        clear_section(user.id)
+        await update.message.reply_text(t("cquiz_no_collocations"))
+        return ConversationHandler.END
+
+    batch = _colloc_links_to_batch(links)
+    context.user_data["colloc_quiz_batch"] = batch
+    context.user_data["colloc_quiz_index"] = 0
+    context.user_data["colloc_quiz_mistakes"] = []
+
+    await update.message.reply_text(t("cquiz_batch_start", count=str(len(batch))), parse_mode=ParseMode.HTML)
+    return await _send_colloc_card(update, context)
+
+
+async def colloc_reveal_handler(update: Update, context: ContextTypes.DEFAULT_TYPE) -> int:
+    """Reveal the translation for the current card and ask the user to self-grade."""
+    query = update.callback_query
+    await query.answer()
+
+    colloc_data = context.user_data.get("colloc_quiz_card")
+    if not colloc_data:
+        return ConversationHandler.END
+
+    user = update.effective_user
+    ui_lang = await _get_ui_lang(user.id)
+    t = get_translator(ui_lang)
+
+    # Only escape a real (user-supplied) translation — the fallback string
+    # below is our own i18n text and already carries intentional HTML markup.
+    translation_html = _h(colloc_data["translation"]) if colloc_data["translation"] else t("mycolloc_no_translation")
+    text = t("cquiz_card_back", phrase=_h(colloc_data["phrase"]), translation=translation_html)
+    await query.edit_message_text(
+        text,
+        parse_mode=ParseMode.HTML,
+        reply_markup=colloc_grade_keyboard(),
+    )
+    return AWAITING_COLLOC_ANSWER
+
+
+async def colloc_grade_handler(update: Update, context: ContextTypes.DEFAULT_TYPE) -> int:
+    """Handle the user's self-report ('I knew it' / 'I forgot it')."""
+    query = update.callback_query
+    await query.answer()
+
+    colloc_data = context.user_data.get("colloc_quiz_card")
+    if not colloc_data:
+        return ConversationHandler.END
+
+    try:
+        is_correct = query.data.split(":")[1] == "1"
+    except (IndexError, ValueError):
+        return AWAITING_COLLOC_ANSWER
+
+    user = update.effective_user
+    ui_lang = await _get_ui_lang(user.id)
+    t = get_translator(ui_lang)
+
+    async with async_session_factory() as session:
+        await collocation_library_service.record_answer(
+            session, user.id, colloc_data["collocation_id"], is_correct
+        )
+        await session.commit()
+
+    result_text = t("cquiz_knew_it") if is_correct else t("cquiz_forgot_it")
+    await query.edit_message_text(
+        f"{result_text}\n\n🔗 <b>{_h(colloc_data['phrase'])}</b>", parse_mode=ParseMode.HTML
+    )
+
+    if not is_correct:
+        mistakes = context.user_data.get("colloc_quiz_mistakes", [])
+        mistakes.append(colloc_data["collocation_id"])
+        context.user_data["colloc_quiz_mistakes"] = mistakes
+
+    context.user_data["colloc_quiz_index"] = context.user_data.get("colloc_quiz_index", 0) + 1
+    return await _handle_colloc_batch_progress(update, context)
+
+
+async def colloc_quiz_skip_handler(update: Update, context: ContextTypes.DEFAULT_TYPE) -> int:
+    """Handle the 'Skip' button on a card's front — counts as forgotten."""
+    query = update.callback_query
+    await query.answer()
+
+    user = update.effective_user
+    ui_lang = await _get_ui_lang(user.id)
+    t = get_translator(ui_lang)
+    colloc_data = context.user_data.get("colloc_quiz_card")
+
+    if colloc_data:
+        await query.edit_message_text(
+            t("quiz_skipped", answer=_h(colloc_data["phrase"])),
+            parse_mode=ParseMode.HTML,
+        )
+        async with async_session_factory() as session:
+            await collocation_library_service.record_answer(
+                session, user.id, colloc_data["collocation_id"], False
+            )
+            await session.commit()
+        mistakes = context.user_data.get("colloc_quiz_mistakes", [])
+        mistakes.append(colloc_data["collocation_id"])
+        context.user_data["colloc_quiz_mistakes"] = mistakes
+
+    context.user_data["colloc_quiz_index"] = context.user_data.get("colloc_quiz_index", 0) + 1
+    return await _handle_colloc_batch_progress(update, context)
+
+
+async def _send_colloc_card(update: Update, context: ContextTypes.DEFAULT_TYPE) -> int:
+    """Show the front of the current batch card (phrase only, translation hidden)."""
+    user = update.effective_user
+    reply_func = (
+        update.callback_query.message.reply_text
+        if update.callback_query
+        else update.message.reply_text
+    )
+
+    ui_lang = await _get_ui_lang(user.id)
+    t = get_translator(ui_lang)
+
+    batch = context.user_data.get("colloc_quiz_batch", [])
+    index = context.user_data.get("colloc_quiz_index", 0)
+
+    if not batch or index >= len(batch):
+        clear_section(user.id)
+        _clear_colloc_quiz_data(context)
+        await reply_func(t("cquiz_finished"), parse_mode=ParseMode.HTML)
+        return ConversationHandler.END
+
+    colloc_data = batch[index]
+    progress = t("cquiz_batch_progress", current=str(index + 1), total=str(len(batch)))
+    text = f"{progress}\n\n{t('cquiz_card_front', phrase=_h(colloc_data['phrase']))}"
+
+    context.user_data["colloc_quiz_card"] = colloc_data
+
+    await reply_func(text, parse_mode=ParseMode.HTML, reply_markup=colloc_front_keyboard())
+    return AWAITING_COLLOC_ANSWER
+
+
+async def _handle_colloc_batch_progress(update: Update, context: ContextTypes.DEFAULT_TYPE) -> int:
+    """Check if the collocation batch is done; restart with mistakes or load next batch."""
+    user = update.effective_user
+    reply_func = (
+        update.callback_query.message.reply_text
+        if update.callback_query
+        else update.message.reply_text
+    )
+
+    ui_lang = await _get_ui_lang(user.id)
+    t = get_translator(ui_lang)
+
+    batch = context.user_data.get("colloc_quiz_batch", [])
+    index = context.user_data.get("colloc_quiz_index", 0)
+    mistakes = context.user_data.get("colloc_quiz_mistakes", [])
+
+    if index < len(batch):
+        return await _send_colloc_card(update, context)
+
+    if mistakes:
+        await reply_func(t("cquiz_batch_repeat", mistakes=str(len(mistakes))), parse_mode=ParseMode.HTML)
+        _random.shuffle(batch)
+        context.user_data["colloc_quiz_batch"] = batch
+        context.user_data["colloc_quiz_index"] = 0
+        context.user_data["colloc_quiz_mistakes"] = []
+        return await _send_colloc_card(update, context)
+
+    await reply_func(t("cquiz_batch_complete", count=str(len(batch))), parse_mode=ParseMode.HTML)
+
+    async with async_session_factory() as session:
+        links = await collocation_library_service.get_batch_for_quiz(session, user.id)
+        await session.commit()
+
+    if not links:
+        clear_section(user.id)
+        _clear_colloc_quiz_data(context)
+        await reply_func(t("cquiz_finished"), parse_mode=ParseMode.HTML)
+        return ConversationHandler.END
+
+    new_batch = _colloc_links_to_batch(links)
+    context.user_data["colloc_quiz_batch"] = new_batch
+    context.user_data["colloc_quiz_index"] = 0
+    context.user_data["colloc_quiz_mistakes"] = []
+
+    await reply_func(t("cquiz_batch_start", count=str(len(new_batch))), parse_mode=ParseMode.HTML)
+    return await _send_colloc_card(update, context)
+
+
+async def colloc_quiz_cancel_handler(update: Update, context: ContextTypes.DEFAULT_TYPE) -> int:
+    """Cancel the active collocation quiz session."""
+    user = update.effective_user
+    _clear_colloc_quiz_data(context)
     clear_section(user.id)
     ui_lang = await _get_ui_lang(user.id)
     t = get_translator(ui_lang)
@@ -964,6 +1327,7 @@ async def learning_handler(update: Update, context: ContextTypes.DEFAULT_TYPE) -
         db_user = await word_service.get_or_create_user(session, user.id)
         current = db_user.learning_language
         ui_lang = db_user.ui_language
+        await session.commit()
 
     t = get_translator(ui_lang)
     await update.message.reply_text(
@@ -1030,7 +1394,7 @@ async def topics_callback(update: Update, context: ContextTypes.DEFAULT_TYPE) ->
         return
 
     topic_name = TOPIC_KEYS[topic_key]
-    words = TOPIC_PACKS[topic_key]
+    words = TOPIC_PACKS[topic_name]
 
     logger.info("User %d selected topic: %s (%d words)", user_id, topic_name, len(words))
 
@@ -1086,6 +1450,15 @@ async def ielts_handler(update: Update, context: ContextTypes.DEFAULT_TYPE) -> N
     await update.message.reply_text(t("section_ielts_active"), parse_mode=ParseMode.HTML)
 
 
+async def collocations_handler(update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
+    """Handle /collocations command — switch to Collocations section."""
+    user = update.effective_user
+    set_section(user.id, Section.COLLOCATIONS)
+    ui_lang = await _get_ui_lang(user.id)
+    t = get_translator(ui_lang)
+    await update.message.reply_text(t("section_collocations_active"), parse_mode=ParseMode.HTML)
+
+
 # ─── Word action callbacks ───────────────────────────────────────────────────
 
 async def word_quiz_callback(update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
@@ -1106,6 +1479,7 @@ async def word_quiz_callback(update: Update, context: ContextTypes.DEFAULT_TYPE)
     # Load batch
     async with async_session_factory() as session:
         words = await quiz_service.get_batch_for_quiz(session, user.id)
+        await session.commit()
 
     if not words:
         clear_section(user.id)
@@ -1232,6 +1606,24 @@ def register_handlers(application: Application) -> None:
         allow_reentry=True,
     )
 
+    # Collocation quiz conversation handler — self-graded flashcards, no AI.
+    # Entry point is the command itself (no mode selection — there's only one
+    # mode). Button-only: reveal the answer, then self-grade knew-it/forgot.
+    colloc_quiz_conv = ConversationHandler(
+        entry_points=[
+            CommandHandler("collocquiz", colloc_quiz_command_handler),
+        ],
+        states={
+            AWAITING_COLLOC_ANSWER: [
+                CallbackQueryHandler(colloc_quiz_skip_handler, pattern=f"^{COLLOC_QUIZ_SKIP}$"),
+                CallbackQueryHandler(colloc_reveal_handler, pattern=f"^{COLLOC_REVEAL}$"),
+                CallbackQueryHandler(colloc_grade_handler, pattern=f"^{COLLOC_GRADE}:"),
+            ],
+        },
+        fallbacks=[CommandHandler("cancel", colloc_quiz_cancel_handler)],
+        allow_reentry=True,
+    )
+
     # Commands
     application.add_handler(CommandHandler("start", start_handler))
     application.add_handler(CommandHandler("menu", menu_handler))
@@ -1246,14 +1638,19 @@ def register_handlers(application: Application) -> None:
     application.add_handler(CommandHandler("ask", ask_handler))
     application.add_handler(CommandHandler("clear", clear_handler))
     application.add_handler(CommandHandler("ielts", ielts_handler))
+    application.add_handler(CommandHandler("collocations", collocations_handler))
+    application.add_handler(CommandHandler("mycollocations", mycollocations_handler))
+    # Note: /collocquiz is registered as colloc_quiz_conv's entry point below,
+    # not here — registering it twice would create a duplicate handler.
 
-    # Quiz conversation handler — MUST be registered BEFORE text_router
+    # Quiz conversation handlers — MUST be registered BEFORE text_router
     # This ensures quiz answers are caught and not processed as translations
     application.add_handler(quiz_conv)
+    application.add_handler(colloc_quiz_conv)
 
     # Text router — routes messages to correct section based on user state
-    # CRITICAL: This handler MUST come AFTER quiz_conv to prevent quiz answers
-    # from being processed as word translations when user is in quiz mode
+    # CRITICAL: This handler MUST come AFTER the quiz conversation handlers to
+    # prevent quiz answers from being processed as word translations
     application.add_handler(MessageHandler(filters.TEXT & ~filters.COMMAND, text_router))
 
     # Callback handlers
@@ -1262,12 +1659,18 @@ def register_handlers(application: Application) -> None:
     application.add_handler(CallbackQueryHandler(ui_callback, pattern=f"^{SET_UI}:"))
     application.add_handler(CallbackQueryHandler(learning_callback, pattern=f"^{SET_LEARN}:"))
     application.add_handler(CallbackQueryHandler(topics_callback, pattern=f"^{TOPIC_SELECT}:"))
+    application.add_handler(CallbackQueryHandler(library_page_callback, pattern=f"^{LIBRARY_PAGE}:"))
 
     # Word action callbacks
     application.add_handler(CallbackQueryHandler(word_quiz_callback, pattern=f"^{WORD_QUIZ}:"))
     application.add_handler(CallbackQueryHandler(word_library_callback, pattern=f"^{WORD_LIBRARY}:"))
     application.add_handler(CallbackQueryHandler(word_delete_callback, pattern=f"^{WORD_DELETE}:"))
     application.add_handler(CallbackQueryHandler(word_more_callback, pattern=f"^{WORD_MORE}$"))
+
+    # Collocation library callbacks
+    application.add_handler(
+        CallbackQueryHandler(colloc_library_page_callback, pattern=f"^{COLLOC_LIBRARY_PAGE}:")
+    )
 
     # Error handler
     application.add_error_handler(error_handler)
