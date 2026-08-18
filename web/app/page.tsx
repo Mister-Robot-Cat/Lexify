@@ -1,3 +1,4 @@
+import Navbar from './components/Navbar'
 import Hero from './sections/Hero'
 import HowItWorks from './sections/HowItWorks'
 import WhyTelegram from './sections/WhyTelegram'
@@ -14,6 +15,7 @@ import Footer from './components/Footer'
 export default function Home() {
   return (
     <main className="min-h-screen bg-[#0a0a0f]">
+      <Navbar />
       <Hero />
       <HowItWorks />
       <WhyTelegram />

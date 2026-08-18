@@ -50,6 +50,10 @@ const config: Config = {
           '50%': { opacity: '1' },
         },
       },
+      gridTemplateColumns: {
+        14: 'repeat(14, minmax(0, 1fr))',
+        28: 'repeat(28, minmax(0, 1fr))',
+      },
       backgroundImage: {
         'gradient-radial': 'radial-gradient(var(--tw-gradient-stops))',
         'gradient-conic': 'conic-gradient(from 180deg at 50% 50%, var(--tw-gradient-stops))',

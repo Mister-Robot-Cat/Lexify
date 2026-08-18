@@ -1,7 +1,7 @@
 "use client";
 
 import { motion } from "framer-motion";
-import { Sparkles, Bot, ArrowRight } from "lucide-react";
+import { Sparkles, Bot, ArrowRight, Globe } from "lucide-react";
 import { HERO_CONTENT } from "../constants/landing";
 import { GlowButton } from "../components/GlowButton";
 import { LiveChatDemo } from "../components/LiveChatDemo";
@@ -103,6 +103,11 @@ export default function Hero() {
               variants={itemVariants}
               className="flex flex-col sm:flex-row items-center lg:items-start gap-4"
             >
+              <GlowButton href="/login">
+                <Globe className="w-5 h-5" />
+                Try on the Web
+              </GlowButton>
+
               <GlowButton href={HERO_CONTENT.ctaLink} external>
                 <Bot className="w-5 h-5" />
                 {HERO_CONTENT.cta}
