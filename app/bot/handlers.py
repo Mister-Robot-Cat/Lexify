@@ -77,31 +77,22 @@ AWAITING_COLLOC_ANSWER = 1  # distinct ConversationHandler instance — value re
 # ─── Helper ──────────────────────────────────────────────────────────────────
 
 async def _get_ui_lang(telegram_id: int) -> str:
-    """Fetch the user's UI language code from the DB.
-
-    This is called at the top of nearly every handler and can implicitly
-    create a new User row (via get_or_create_user) for a first-time sender.
-    Without an explicit commit, that new row was silently discarded when the
-    session closed — the next handler in the same update would just recreate
-    it, but any handler that stopped here (e.g. plain read-only commands)
-    never persisted the user at all.
-    """
+    """Fetch the user's UI language code from the DB."""
     async with async_session_factory() as session:
         ui_lang = await word_service.get_ui_language(session, telegram_id)
         await session.commit()
         return ui_lang
 
 
-def _h(text: str) -> str:
+def _h(text: str | None) -> str:
     """Escape HTML special characters for Telegram HTML parse mode."""
-    return text.replace("&", "&amp;").replace("<", "&lt;").replace(">", "&gt;")
+    if not text:
+        return ""
+    return str(text).replace("&", "&amp;").replace("<", "&lt;").replace(">", "&gt;")
 
 
 def _short_translation(raw: str) -> str:
-    """Extract first translation variant from raw translation string.
-
-    Handles: "обычный", "1. обычный\\n2. повседневный", "1. обычный 2. повседневный"
-    """
+    """Extract first translation variant from raw translation string."""
     parts = _re.split(r'(?<!\d)\d+\.\s+', raw.strip())
     parts = [p.strip() for p in parts if p.strip()]
     return parts[0] if parts else raw.strip()
@@ -109,16 +100,22 @@ def _short_translation(raw: str) -> str:
 
 def _format_word_html(word, show_synonyms: bool = True) -> str:
     """Format a Word model into a Telegram HTML message."""
+    level = getattr(word, "level", None) or "N/A"
+    translation = getattr(word, "translation", None) or ""
+    meaning = getattr(word, "meaning", None) or ""
+    example = getattr(word, "example", None) or ""
+    simple_exp = getattr(word, "simple_explanation", None) or meaning
+
     parts = [
-        f"📖 <b>{_h(word.word)}</b>  [{_h(word.level)}]\n",
-        f"🌐 <b>Translation:</b>\n    {_h(word.translation)}",
-        f"📝 <b>Meaning:</b>\n    {_h(word.meaning)}",
-        f"💬 <b>Example:</b> <i>{_h(word.example)}</i>",
-        f"💡 <b>Simple Explanation:</b> {_h(word.simple_explanation)}",
+        f"📖 <b>{_h(word.word)}</b>  [{_h(level)}]\n",
+        f"🌐 <b>Translation:</b>\n    {_h(translation)}",
+        f"📝 <b>Meaning:</b>\n    {_h(meaning)}",
+        f"💬 <b>Example:</b> <i>{_h(example)}</i>",
+        f"💡 <b>Simple Explanation:</b> {_h(simple_exp)}",
     ]
-    if show_synonyms and word.synonyms:
-        # Format synonyms nicely - split by comma and show first 3
-        synonyms_list = [s.strip() for s in word.synonyms.split(",") if s.strip()]
+    synonyms = getattr(word, "synonyms", None)
+    if show_synonyms and synonyms:
+        synonyms_list = [s.strip() for s in str(synonyms).split(",") if s.strip()]
         if synonyms_list:
             top_synonyms = synonyms_list[:3]
             synonyms_text = ", ".join(f"<code>{_h(s)}</code>" for s in top_synonyms)
@@ -476,10 +473,10 @@ async def _handle_words_section(update: Update, context: ContextTypes.DEFAULT_TY
 
     except ValueError as e:
         logger.warning("Failed to process word '%s': %s", text, e)
-        await update.message.reply_text(t("word_error"))
-    except Exception:
+        await update.message.reply_text(f"⚠️ {_h(str(e))}", parse_mode=ParseMode.HTML)
+    except Exception as e:
         logger.exception("Unexpected error processing word '%s'", text)
-        await update.message.reply_text(t("word_fatal"))
+        await update.message.reply_text(f"⚠️ {t('word_fatal')}\n\n<i>Details: {_h(str(e))}</i>", parse_mode=ParseMode.HTML)
 
 
 async def _handle_grammar_section(update: Update, context: ContextTypes.DEFAULT_TYPE, text: str, t) -> None:
