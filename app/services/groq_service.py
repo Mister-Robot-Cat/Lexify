@@ -1,7 +1,7 @@
 import logging
 import re
 
-from groq import AsyncGroq
+from groq import APIConnectionError, AsyncGroq, InternalServerError, RateLimitError
 from pydantic import BaseModel, Field, ValidationError, field_validator
 from tenacity import (
     retry,
@@ -15,6 +15,13 @@ from app.config import settings
 from app.services.cache_service import cache_service
 
 logger = logging.getLogger(__name__)
+
+# Transient Groq failures worth retrying: connection drops, timeouts (both are
+# subclasses of APIConnectionError), rate limits (429), and server-side 5xx
+# errors. NOTE: the groq SDK raises its own GroqError hierarchy — it does NOT
+# raise Python's builtin ConnectionError/TimeoutError, so retrying on those
+# (the previous configuration) never actually caught anything.
+RETRYABLE_GROQ_ERRORS = (APIConnectionError, RateLimitError, InternalServerError)
 
 PROMPT_TEMPLATE = """<persona>
 You are a precise vocabulary database engine. Your sole function: generate structured word explanations for language learners.
@@ -137,14 +144,17 @@ class GroqService:
     """Service for interacting with Groq API."""
 
     def __init__(self) -> None:
-        self._client = AsyncGroq(api_key=settings.groq_api_key)
         self._model = settings.groq_model
         logger.info("GroqService initialized with model: %s", self._model)
+
+    def _get_client(self) -> AsyncGroq:
+        """Return AsyncGroq client using current settings API key."""
+        return AsyncGroq(api_key=settings.groq_api_key)
 
     @retry(
         stop=stop_after_attempt(3),
         wait=wait_exponential(multiplier=1, min=2, max=10),
-        retry=retry_if_exception_type((ConnectionError, TimeoutError)),
+        retry=retry_if_exception_type(RETRYABLE_GROQ_ERRORS),
         before_sleep=before_sleep_log(logger, logging.WARNING),
         reraise=True,
     )
@@ -154,20 +164,7 @@ class GroqService:
         language: str = "Russian",
         learning_language: str = "English",
     ) -> WordExplanation:
-        """Send a word to Groq and return a structured explanation.
-
-        Args:
-            word: The word or phrase to explain.
-            language: User's native language for translations.
-            learning_language: The language the user is learning.
-
-        Returns:
-            WordExplanation with parsed fields.
-
-        Raises:
-            ValueError: If the response cannot be parsed.
-            Exception: On API communication errors.
-        """
+        """Send a word to Groq and return a structured explanation."""
         # Normalize word for cache key
         cache_word = word.lower().strip()
         cache_key_parts = (learning_language, language, cache_word)
@@ -190,11 +187,12 @@ class GroqService:
         logger.debug("Sending prompt to Groq for word: %s", word)
 
         try:
-            response = await self._client.chat.completions.create(
+            client = self._get_client()
+            response = await client.chat.completions.create(
                 model=self._model,
                 messages=[{"role": "user", "content": prompt}],
                 temperature=0.3,
-                max_tokens=256,
+                max_tokens=1024,
             )
             raw_text = response.choices[0].message.content.strip()
             logger.debug("Groq raw response:\n%s", raw_text)
@@ -215,11 +213,10 @@ class GroqService:
 
     @staticmethod
     def _parse_response(text: str, original_word: str) -> WordExplanation:
-        """Parse the structured text response from Groq into a WordExplanation.
+        """Parse structured text from Groq into WordExplanation."""
+        # Strip markdown bolding and code blocks if present
+        clean_text = re.sub(r"\*\*|\*|#", "", text)
 
-        Extracts multi-line field values (e.g. numbered meanings) by capturing
-        everything between one label and the next.
-        """
         # Ordered list of fields as they appear in the prompt
         field_labels = [
             ("word", "Word"),
@@ -232,7 +229,6 @@ class GroqService:
         ]
 
         # Build a regex that captures content between labels (including multi-line)
-        label_names = [label for _, label in field_labels]
         parsed: dict[str, str] = {}
         for i, (key, label) in enumerate(field_labels):
             # Match from "Label:" up to the next label or end of text
@@ -243,34 +239,31 @@ class GroqService:
                 pattern = rf"{re.escape(label)}:\s*(.*?)(?=\n\s*(?:{next_labels}):|\Z)"
             else:
                 pattern = rf"{re.escape(label)}:\s*(.*)"
-            match = re.search(pattern, text, re.IGNORECASE | re.DOTALL)
+            match = re.search(pattern, clean_text, re.IGNORECASE | re.DOTALL)
             if match:
                 value = match.group(1).strip()
                 if value:
                     parsed[key] = value
 
+        word_val = parsed.get("word", original_word)
+        if word_val.lower() == "n/a":
+            word_val = original_word
+
+        translation_val = parsed.get("translation") or "Translation not available"
+        meaning_val = parsed.get("meaning") or parsed.get("simple_explanation") or "Definition not available"
+        example_val = parsed.get("example") or f"Example sentence with {word_val}."
+        simple_exp = parsed.get("simple_explanation") or meaning_val
+
         # Build data dict for Pydantic validation
         data = {
-            "word": parsed.get("word", original_word),
-            "translation": parsed.get("translation", ""),
-            "meaning": parsed.get("meaning", ""),
-            "example": parsed.get("example", ""),
-            "simple_explanation": parsed.get("simple_explanation", ""),
-            "level": parsed.get("level", "N/A"),
-            "synonyms": parsed.get("synonyms", ""),
+            "word": word_val,
+            "translation": translation_val,
+            "meaning": meaning_val,
+            "example": example_val,
+            "simple_explanation": simple_exp,
+            "level": parsed.get("level", "B1"),
+            "synonyms": parsed.get("synonyms", "N/A"),
         }
-
-        # Validate essential fields are present
-        required = ["translation", "meaning", "example", "simple_explanation"]
-        missing = [k for k in required if not data.get(k)]
-        if missing:
-            logger.warning(
-                "Groq response missing required fields %s for word '%s'. Raw:\n%s",
-                missing,
-                original_word,
-                text,
-            )
-            raise ValueError(f"Could not parse Groq response. Missing fields: {missing}")
 
         try:
             return WordExplanation.model_validate(data)
@@ -286,7 +279,7 @@ class GroqService:
     @retry(
         stop=stop_after_attempt(3),
         wait=wait_exponential(multiplier=1, min=2, max=10),
-        retry=retry_if_exception_type((ConnectionError, TimeoutError)),
+        retry=retry_if_exception_type(RETRYABLE_GROQ_ERRORS),
         before_sleep=before_sleep_log(logger, logging.WARNING),
         reraise=True,
     )
@@ -296,20 +289,7 @@ class GroqService:
         language: str = "Russian",
         learning_language: str = "English",
     ) -> ReverseTranslation:
-        """Translate from native language to learning language with multiple options.
-
-        Args:
-            word: The word/phrase in native language to translate.
-            language: User's native language.
-            learning_language: The language the user is learning.
-
-        Returns:
-            ReverseTranslation with multiple translation options.
-
-        Raises:
-            ValueError: If the response cannot be parsed.
-            Exception: On API communication errors.
-        """
+        """Send native word to Groq for reverse translation to learning language."""
         prompt = REVERSE_PROMPT_TEMPLATE.format(
             word=word,
             native_language=language,
@@ -318,11 +298,12 @@ class GroqService:
         logger.debug("Sending reverse translation prompt to Groq for: %s", word)
 
         try:
-            response = await self._client.chat.completions.create(
+            client = self._get_client()
+            response = await client.chat.completions.create(
                 model=self._model,
                 messages=[{"role": "user", "content": prompt}],
                 temperature=0.3,
-                max_tokens=256,
+                max_tokens=1024,
             )
             raw_text = response.choices[0].message.content.strip()
             logger.debug("Groq reverse translation raw response:\n%s", raw_text)
@@ -334,6 +315,8 @@ class GroqService:
     @staticmethod
     def _parse_reverse_response(text: str, original_word: str) -> ReverseTranslation:
         """Parse the reverse translation response from Groq."""
+        clean_text = re.sub(r"\*\*|\*|#", "", text)
+
         field_labels = [
             ("word", "Word"),
             ("translations", "Translations"),
@@ -351,7 +334,7 @@ class GroqService:
                 pattern = rf"{re.escape(label)}:\s*(.*?)(?=\n\s*(?:{next_labels}):|\Z)"
             else:
                 pattern = rf"{re.escape(label)}:\s*(.*)"
-            match = re.search(pattern, text, re.IGNORECASE | re.DOTALL)
+            match = re.search(pattern, clean_text, re.IGNORECASE | re.DOTALL)
             if match:
                 value = match.group(1).strip()
                 if value:
@@ -360,23 +343,11 @@ class GroqService:
         # Build data dict for Pydantic validation
         data = {
             "word": parsed.get("word", original_word),
-            "translations": parsed.get("translations", ""),
-            "meanings": parsed.get("meanings", ""),
-            "examples": parsed.get("examples", ""),
-            "context": parsed.get("context", ""),
+            "translations": parsed.get("translations") or "1. Translation unavailable",
+            "meanings": parsed.get("meanings") or "1. Meaning unavailable",
+            "examples": parsed.get("examples") or "1. Example unavailable",
+            "context": parsed.get("context") or "1. Context unavailable",
         }
-
-        # Validate essential fields
-        required = ["translations", "meanings", "examples", "context"]
-        missing = [k for k in required if not data.get(k)]
-        if missing:
-            logger.warning(
-                "Groq reverse response missing required fields %s for word '%s'. Raw:\n%s",
-                missing,
-                original_word,
-                text,
-            )
-            raise ValueError(f"Could not parse reverse translation response. Missing fields: {missing}")
 
         try:
             return ReverseTranslation.model_validate(data)
