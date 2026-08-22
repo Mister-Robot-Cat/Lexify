@@ -60,7 +60,7 @@ function SettingsPanel({
     >
       <div className="mb-3 flex items-center justify-between">
         <h4 className="text-sm font-semibold text-white">Shadowing settings</h4>
-        <button onClick={onClose} aria-label="Close settings" className="flex h-8 w-8 items-center justify-center text-muted hover:text-white">
+        <button onClick={onClose} aria-label="Close settings" className="flex h-8 w-8 items-center justify-center rounded-lg text-muted transition-colors hover:bg-white/10 hover:text-white">
           <X size={16} />
         </button>
       </div>
