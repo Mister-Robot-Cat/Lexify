@@ -125,7 +125,7 @@ export default function TutorPage() {
             type="submit"
             disabled={sending || !input.trim()}
             aria-label="Send message"
-            className="flex min-h-[44px] min-w-[44px] items-center justify-center rounded-lg bg-primary px-4 py-2.5 text-white hover:bg-primary-hover disabled:opacity-50"
+            className="flex min-h-[44px] min-w-[44px] items-center justify-center rounded-lg bg-primary px-4 py-2.5 text-white transition-all duration-200 hover:bg-primary-hover active:scale-95 disabled:opacity-50"
           >
             <Send size={16} />
           </button>
