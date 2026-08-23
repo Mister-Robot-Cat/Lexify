@@ -16,6 +16,8 @@ export default function AudioButton({
   iconSize = 16,
   className = '',
 }: AudioButtonProps) {
+  if (!word || !word.trim()) return null
+
   return (
     <button
       onClick={(e) => {
