@@ -6,7 +6,7 @@ export function extract_video_id_client(value: string | null | undefined): strin
   const trimmed = value.trim()
   if (YOUTUBE_ID_RE.test(trimmed)) return trimmed
 
-  const match = trimmed.match(/(?:v=|\/embed\/|youtu\.be\/|\/shorts\/)([A-Za-z0-9_-]{11})/)
+  const match = trimmed.match(/(?:v=|\/embed\/|youtu\.be\/|\/shorts\/|\/live\/)([A-Za-z0-9_-]{11})/)
   return match ? match[1] : null
 }
 
