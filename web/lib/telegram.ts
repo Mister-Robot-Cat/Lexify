@@ -75,3 +75,14 @@ export function triggerHapticFeedback(style: 'light' | 'medium' | 'heavy' = 'lig
     }
   }
 }
+
+export function triggerNotificationFeedback(type: 'error' | 'success' | 'warning' = 'success') {
+  const tg = getTelegramWebApp();
+  if (tg?.HapticFeedback) {
+    try {
+      tg.HapticFeedback.notificationOccurred(type);
+    } catch {
+      // Ignore if unsupported
+    }
+  }
+}
