@@ -3,6 +3,7 @@
  */
 
 export function speakWord(text: string, lang = 'en-US') {
+  if (!text || !text.trim()) return
   if (typeof window === 'undefined' || !('speechSynthesis' in window)) return
 
   try {
