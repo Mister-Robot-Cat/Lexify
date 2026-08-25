@@ -1,4 +1,5 @@
 import logging
+import os
 import re
 
 from groq import APIConnectionError, AsyncGroq, InternalServerError, RateLimitError
@@ -147,9 +148,25 @@ class GroqService:
         self._model = settings.groq_model
         logger.info("GroqService initialized with model: %s", self._model)
 
+    def _get_api_key(self) -> str:
+        """Dynamically read the latest GROQ_API_KEY from .env file or environment."""
+        try:
+            root_dir = os.path.dirname(os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
+            env_path = os.path.join(root_dir, ".env")
+            if os.path.exists(env_path):
+                with open(env_path, "r", encoding="utf-8") as f:
+                    for line in f:
+                        if line.startswith("GROQ_API_KEY="):
+                            val = line.split("=", 1)[1].strip()
+                            if val:
+                                return val
+        except Exception:
+            pass
+        return os.getenv("GROQ_API_KEY") or settings.groq_api_key
+
     def _get_client(self) -> AsyncGroq:
         """Return AsyncGroq client using current settings API key."""
-        return AsyncGroq(api_key=settings.groq_api_key)
+        return AsyncGroq(api_key=self._get_api_key())
 
     @retry(
         stop=stop_after_attempt(3),
