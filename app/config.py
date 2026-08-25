@@ -17,7 +17,7 @@ class Settings(BaseSettings):
 
     # Groq
     groq_api_key: str = Field(..., description="Groq API key")
-    groq_model: str = Field("llama-3.1-8b-instant", description="Groq model name")
+    groq_model: str = Field("groq/compound-mini", description="Groq model name")
 
     # Redis / Caching
     redis_url: str = Field(
