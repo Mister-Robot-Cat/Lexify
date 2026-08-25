@@ -428,8 +428,8 @@ async def section_callback(update: Update, context: ContextTypes.DEFAULT_TYPE) -
 
 # ─── Section handlers (each processes text for its own section) ──────────────
 
-async def _handle_words_section(update: Update, context: ContextTypes.DEFAULT_TYPE, text: str, t) -> None:
-    """Process text in the Word Lookup section."""
+async def _process_single_word(update: Update, context: ContextTypes.DEFAULT_TYPE, text: str, t) -> None:
+    """Process a single word or phrase in the Word Lookup section."""
     user = update.effective_user
 
     if len(text) > 200:
@@ -439,7 +439,7 @@ async def _handle_words_section(update: Update, context: ContextTypes.DEFAULT_TY
     logger.info("[WORDS] user %d: '%s'", user.id, text)
 
     try:
-        # Show typing indicator immediately (no "looking up" message for cleaner UX)
+        # Show typing indicator immediately
         await context.bot.send_chat_action(
             chat_id=update.effective_chat.id,
             action=ChatAction.TYPING
@@ -477,6 +477,24 @@ async def _handle_words_section(update: Update, context: ContextTypes.DEFAULT_TY
     except Exception as e:
         logger.exception("Unexpected error processing word '%s'", text)
         await update.message.reply_text(f"⚠️ {t('word_fatal')}\n\n<i>Details: {_h(str(e))}</i>", parse_mode=ParseMode.HTML)
+
+
+async def _handle_words_section(update: Update, context: ContextTypes.DEFAULT_TYPE, text: str, t) -> None:
+    """Process text in the Word Lookup section, supporting multi-line batch input."""
+    lines = [line.strip() for line in (text or "").splitlines() if line.strip()]
+    if not lines:
+        return
+
+    if len(lines) > 1:
+        batch_lines = lines[:25]
+        await update.message.reply_text(
+            f"📦 <b>Processing batch of {len(batch_lines)} items...</b>",
+            parse_mode=ParseMode.HTML,
+        )
+        for line in batch_lines:
+            await _process_single_word(update, context, line, t)
+    else:
+        await _process_single_word(update, context, lines[0], t)
 
 
 async def _handle_grammar_section(update: Update, context: ContextTypes.DEFAULT_TYPE, text: str, t) -> None:
