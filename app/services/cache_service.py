@@ -19,26 +19,32 @@ class CacheService:
         self._ttl = settings.cache_ttl_seconds
 
     async def _get_client(self) -> redis.Redis:
-        """Lazy initialization of Redis connection."""
+        """Lazy initialization of Redis connection.
+
+        On a failed ping, ``self._redis`` is reset to None so the next call
+        retries the connection (and re-logs success) instead of silently
+        holding on to a client that never passed its health check.
+        """
         if self._redis is None:
             try:
-                self._redis = redis.from_url(
+                client = redis.from_url(
                     settings.redis_url,
                     decode_responses=True,
                     socket_connect_timeout=5,
                     socket_keepalive=True,
                     health_check_interval=30,
                 )
-                await self._redis.ping()
+                await client.ping()
+                self._redis = client
                 logger.info("Redis cache connected successfully")
             except Exception as e:
                 logger.warning("Failed to connect to Redis: %s. Caching disabled.", e)
                 raise
         return self._redis
 
-    def _make_key(self, prefix: str, *parts: str) -> str:
+    def _make_key(self, prefix: str, *parts: Any) -> str:
         """Create a cache key from prefix and parts."""
-        safe_parts = [p.replace(":", "_").lower() for p in parts]
+        safe_parts = [str(p or "").replace(":", "_").lower() for p in parts]
         return f"lexify:{prefix}:{':'.join(safe_parts)}"
 
     async def get(self, prefix: str, *key_parts: str) -> Any | None:
