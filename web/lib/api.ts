@@ -25,15 +25,29 @@ const TOKEN_KEY = 'lexify_token'
 
 export function getToken(): string | null {
   if (typeof window === 'undefined') return null
-  return localStorage.getItem(TOKEN_KEY)
+  try {
+    return localStorage.getItem(TOKEN_KEY)
+  } catch {
+    return null
+  }
 }
 
 export function setToken(token: string) {
-  localStorage.setItem(TOKEN_KEY, token)
+  if (typeof window === 'undefined') return
+  try {
+    localStorage.setItem(TOKEN_KEY, token)
+  } catch (err) {
+    console.warn('Failed to save token to localStorage:', err)
+  }
 }
 
 export function clearToken() {
-  localStorage.removeItem(TOKEN_KEY)
+  if (typeof window === 'undefined') return
+  try {
+    localStorage.removeItem(TOKEN_KEY)
+  } catch {
+    // Ignore storage clear errors
+  }
 }
 
 export class ApiError extends Error {
