@@ -33,6 +33,7 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
     const token = getToken()
     if (!token) {
       setUser(null)
+      setLoading(false)
       return
     }
     try {
