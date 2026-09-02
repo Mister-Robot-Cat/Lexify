@@ -286,7 +286,7 @@ export function translate(
   let template = dict[key] ?? dictionaries.en[key] ?? key
   if (params) {
     Object.entries(params).forEach(([k, v]) => {
-      template = template.replace(new RegExp(`\\{${k}\\}`, 'g'), String(v))
+      template = template.replaceAll(`{${k}}`, String(v))
     })
   }
   return template
