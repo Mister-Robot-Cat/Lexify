@@ -1,40 +1,36 @@
-# Lexify Web
+This is a [Next.js](https://nextjs.org) project bootstrapped with [`create-next-app`](https://nextjs.org/docs/app/api-reference/cli/create-next-app).
 
-The Lexify website: a landing page plus a full dashboard (library, quizzes, grammar tutor, IELTS evaluation, themed packs, settings) that talks to the same backend as the Telegram bot.
+## Getting Started
 
-## Stack
-
-- Next.js 14 (App Router, static export)
-- Tailwind CSS
-- Framer Motion
-- Plain `fetch` API client with a JWT bearer token in `localStorage`
-
-## Setup
+First, run the development server:
 
 ```bash
-npm install
-cp .env.local.example .env.local   # set NEXT_PUBLIC_API_URL if not using the default
-npm run dev                        # http://localhost:3000
+npm run dev
+# or
+yarn dev
+# or
+pnpm dev
+# or
+bun dev
 ```
 
-The dashboard needs the backend running:
+Open [http://localhost:3000](http://localhost:3000) with your browser to see the result.
 
-```bash
-# from the repo root
-python -m app.web                  # http://localhost:8001
-```
+You can start editing the page by modifying `app/page.tsx`. The page auto-updates as you edit the file.
 
-## Build
+This project uses [`next/font`](https://nextjs.org/docs/app/building-your-application/optimizing/fonts) to automatically optimize and load [Geist](https://vercel.com/font), a new font family for Vercel.
 
-```bash
-npm run build      # static export into web/dist
-npx serve dist      # preview the export locally
-```
+## Learn More
 
-`next.config.js` uses `output: 'export'`, so the whole site — landing page and dashboard — ships as static HTML/JS. All data fetching happens client-side against the FastAPI backend, so the export can be hosted on any static host (Vercel, Netlify, S3, GitHub Pages) as long as `NEXT_PUBLIC_API_URL` points at a running `app.web` instance with CORS configured for that host (see `CORS_ORIGINS` in the backend `.env`).
+To learn more about Next.js, take a look at the following resources:
 
-## Auth
+- [Next.js Documentation](https://nextjs.org/docs) - learn about Next.js features and API.
+- [Learn Next.js](https://nextjs.org/learn) - an interactive Next.js tutorial.
 
-- Email/password: `/api/auth/register`, `/api/auth/login`.
-- Telegram Mini App: if opened inside Telegram with `initData` present, the site logs in automatically via `/api/auth/telegram`, validating Telegram's HMAC signature server-side.
-- A signed-in web account can link a Telegram account (`/dashboard/settings` → "Link Telegram account"), merging both into one profile so words and progress from the bot and the website share the same library.
+You can check out [the Next.js GitHub repository](https://github.com/vercel/next.js) - your feedback and contributions are welcome!
+
+## Deploy on Vercel
+
+The easiest way to deploy your Next.js app is to use the [Vercel Platform](https://vercel.com/new?utm_medium=default-template&filter=next.js&utm_source=create-next-app&utm_campaign=create-next-app-readme) from the creators of Next.js.
+
+Check out our [Next.js deployment documentation](https://nextjs.org/docs/app/building-your-application/deploying) for more details.
