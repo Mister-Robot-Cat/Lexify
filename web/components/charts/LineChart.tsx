@@ -7,6 +7,7 @@ export function LineChart({
   min,
   max,
   target,
+  width = 320,
 }: {
   points: number[];
   labels?: string[];
@@ -15,8 +16,9 @@ export function LineChart({
   min?: number;
   max?: number;
   target?: number;
+  /** Drawing width; use a larger value for wide containers so labels keep their size. */
+  width?: number;
 }) {
-  const width = 320;
   const pad = { l: 28, r: 10, t: 10, b: labels ? 22 : 8 };
   const all = target != null ? [...points, target] : points;
   const lo = min ?? Math.floor(Math.min(...all) - 0.5);

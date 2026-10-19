@@ -8,7 +8,7 @@ import { useI18n } from "@/components/i18n";
 import { ApiError, errorText, postJson } from "@/lib/api-client";
 import type { DiagnosticTask, SpeakingPart } from "@/lib/diagnostic/types";
 import { fmt } from "@/lib/i18n/format";
-import { TestShell } from "./TestShell";
+import { TestShell, type TestUrls } from "./TestShell";
 import { formatClock } from "./useCountdown";
 
 type Item = { part: SpeakingPart; index: number; question: string; key: string };
@@ -79,7 +79,7 @@ function speak(text: string) {
   window.speechSynthesis.speak(u);
 }
 
-export function SpeakingTest({ task, attemptId, done }: { task: DiagnosticTask; attemptId: string; done: string[] }) {
+export function SpeakingTest({ task, attemptId, done, urls }: { task: DiagnosticTask; attemptId: string; done: string[]; urls: TestUrls }) {
   const { locale, m } = useI18n();
   const s = m.diag.speaking;
   const router = useRouter();
@@ -164,7 +164,7 @@ export function SpeakingTest({ task, attemptId, done }: { task: DiagnosticTask; 
     form.append("durationSec", String(Math.round(duration * 10) / 10));
     form.append("audio", blob, `answer.${blob.type.includes("mp4") ? "m4a" : "webm"}`);
     try {
-      const res = await fetch("/api/diagnostic/recording", { method: "POST", body: form });
+      const res = await fetch("/api/attempts/recording", { method: "POST", body: form });
       if (!res.ok) throw new ApiError(res.status, ((await res.json().catch(() => ({}))) as { error?: string }).error ?? "generic");
       setDoneKeys((d) => new Set(d).add(item.key));
     } catch {
@@ -227,10 +227,10 @@ export function SpeakingTest({ task, attemptId, done }: { task: DiagnosticTask; 
     // Wait for uploads still in flight.
     for (let i = 0; i < 120 && uploadsRef.current > 0; i++) await new Promise((r) => setTimeout(r, 500));
     try {
-      const res = await postJson<{ voided?: boolean }>("/api/diagnostic/submit", { attemptId, locale });
+      const res = await postJson<{ voided?: boolean }>("/api/attempts/submit", { attemptId, locale });
       stream?.getTracks().forEach((t) => t.stop());
       if (res.voided) setStep({ kind: "voided" });
-      else router.replace(`/${locale}/welcome/diagnostic/review/speaking`);
+      else router.replace(urls.review);
     } catch (err) {
       setError(errorText(err, m.diag.errors));
       setStep({ kind: "finish" });
@@ -245,7 +245,7 @@ export function SpeakingTest({ task, attemptId, done }: { task: DiagnosticTask; 
   const progress = (doneKeys.size / Math.max(1, total)) * 100;
 
   return (
-    <TestShell title={`${m.common.skills.speaking} · ${task.title}`} secondsLeft={null} saveState={uploads > 0 ? "saving" : "idle"} onSubmit={finish} submitting={step.kind === "scoring"} hideSubmit>
+    <TestShell title={`${m.common.skills.speaking} · ${task.title}`} secondsLeft={null} saveState={uploads > 0 ? "saving" : "idle"} onSubmit={finish} submitting={step.kind === "scoring"} hideSubmit exitUrl={urls.exit}>
       <div className="h-1 bg-sand">
         <div className="h-full bg-speaking transition-all" style={{ width: `${progress}%` }} />
       </div>
@@ -389,7 +389,7 @@ export function SpeakingTest({ task, attemptId, done }: { task: DiagnosticTask; 
             <AlertTriangle className="mx-auto h-10 w-10 text-amber-deep" />
             <h2 className="mt-4 font-display text-2xl font-semibold">{s.voidedTitle}</h2>
             <p className="mt-2 text-muted">{s.voidedText}</p>
-            <Link href={`/${locale}/welcome/diagnostic`} className="btn-primary btn-lg mt-6">{s.backToHub}</Link>
+            <Link href={urls.exit} className="btn-primary btn-lg mt-6">{urls.exitLabel ?? s.backToHub}</Link>
           </div>
         )}
       </div>

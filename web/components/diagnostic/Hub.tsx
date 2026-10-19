@@ -48,7 +48,7 @@ export function Hub({ data, attemptIds }: { data: HubData; attemptIds: Partial<R
     setBusy(section);
     setError(null);
     try {
-      await postJson("/api/diagnostic/rescore", { attemptId: attemptIds[section], locale });
+      await postJson("/api/attempts/rescore", { attemptId: attemptIds[section], locale });
       router.refresh();
     } catch (err) {
       setError(errorText(err, d.errors));

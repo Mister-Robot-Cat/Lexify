@@ -11,7 +11,7 @@ import { exitFullscreen } from "@/lib/fullscreen";
 import { fmt } from "@/lib/i18n/format";
 import { AudioOnce } from "./AudioOnce";
 import { QuestionView } from "./QuestionView";
-import { TestShell } from "./TestShell";
+import { TestShell, type TestUrls } from "./TestShell";
 import { useAutosave } from "./useAutosave";
 import { useCountdown } from "./useCountdown";
 
@@ -21,12 +21,14 @@ export function ObjectiveTest({
   deadline,
   serverNow,
   saved,
+  urls,
 }: {
   task: DiagnosticTask;
   attemptId: string;
   deadline: number;
   serverNow: number;
   saved: Record<string, string>;
+  urls: TestUrls;
 }) {
   const { locale, m } = useI18n();
   const t = m.diag.test;
@@ -48,15 +50,15 @@ export function ObjectiveTest({
     setSubmitting(true);
     setError(null);
     try {
-      await postJson("/api/diagnostic/submit", { attemptId, locale, answers });
+      await postJson("/api/attempts/submit", { attemptId, locale, answers });
       exitFullscreen();
-      router.replace(`/${locale}/welcome/diagnostic/review/${task.section}`);
+      router.replace(urls.review);
     } catch (err) {
       submittedRef.current = false;
       setSubmitting(false);
       setError(errorText(err, m.diag.errors));
     }
-  }, [answers, attemptId, locale, m.diag.errors, router, task.section]);
+  }, [answers, attemptId, locale, m.diag.errors, router, urls.review]);
 
   const left = useCountdown(deadline, serverNow, () => {
     setTimeUp(true);
@@ -92,6 +94,7 @@ export function ObjectiveTest({
       onSubmit={submit}
       submitting={submitting}
       unanswered={questions.length - answered}
+      exitUrl={urls.exit}
     >
       {(timeUp || submitting) && (
         <div className="fixed inset-0 z-40 flex items-center justify-center bg-paper/80 backdrop-blur-sm">

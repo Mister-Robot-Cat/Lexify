@@ -10,7 +10,7 @@ import type { DiagnosticTask } from "@/lib/diagnostic/types";
 import { exitFullscreen } from "@/lib/fullscreen";
 import { fmt } from "@/lib/i18n/format";
 import { countWords } from "@/lib/words";
-import { TestShell } from "./TestShell";
+import { TestShell, type TestUrls } from "./TestShell";
 import { useAutosave } from "./useAutosave";
 import { useCountdown } from "./useCountdown";
 
@@ -20,12 +20,14 @@ export function WritingTest({
   deadline,
   serverNow,
   saved,
+  urls,
 }: {
   task: DiagnosticTask;
   attemptId: string;
   deadline: number;
   serverNow: number;
   saved: Record<string, string>;
+  urls: TestUrls;
 }) {
   const { locale, m } = useI18n();
   const w = m.diag.writing;
@@ -45,18 +47,18 @@ export function WritingTest({
     setSubmitting(true);
     setError(null);
     try {
-      await postJson("/api/diagnostic/submit", { attemptId, locale, texts });
+      await postJson("/api/attempts/submit", { attemptId, locale, texts });
       exitFullscreen();
-      router.replace(`/${locale}/welcome/diagnostic/review/writing`);
+      router.replace(urls.review);
     } catch (err) {
       // The essays are frozen on the server even if scoring fails; the hub offers a retry.
       setError(errorText(err, m.diag.errors));
       setTimeout(() => {
         exitFullscreen();
-        router.replace(`/${locale}/welcome/diagnostic`);
+        router.replace(urls.exit);
       }, 4000);
     }
-  }, [attemptId, locale, m.diag.errors, router, texts]);
+  }, [attemptId, locale, m.diag.errors, router, texts, urls]);
 
   const left = useCountdown(deadline, serverNow, () => {
     setTimeUp(true);
@@ -67,7 +69,7 @@ export function WritingTest({
   const words = countWords(texts[current.id] ?? "");
 
   return (
-    <TestShell title={`${m.common.skills.writing} · ${task.title}`} secondsLeft={left} saveState={saveState} onSubmit={submit} submitting={submitting}>
+    <TestShell title={`${m.common.skills.writing} · ${task.title}`} secondsLeft={left} saveState={saveState} onSubmit={submit} submitting={submitting} exitUrl={urls.exit}>
       {(timeUp || submitting) && (
         <div className="fixed inset-0 z-40 flex items-center justify-center bg-paper/85 px-4 backdrop-blur-sm">
           <div className="card max-w-md p-6 text-center">

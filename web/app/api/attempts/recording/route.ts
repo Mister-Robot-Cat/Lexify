@@ -1,6 +1,6 @@
 import { NextResponse } from "next/server";
 import { z } from "zod";
-import { saveRecording } from "@/server/diagnostic/service";
+import { saveRecording } from "@/server/attempts/engine";
 import { HttpError, needUser, route } from "@/server/http";
 
 const MAX_BYTES = 4 * 1024 * 1024; // Vercel functions accept bodies up to 4.5 MB.

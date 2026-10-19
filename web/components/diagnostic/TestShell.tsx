@@ -12,6 +12,9 @@ import { formatClock } from "./useCountdown";
 
 export type SaveState = "idle" | "saving" | "saved" | "error";
 
+/** Where a test goes when the user leaves it and after it is submitted. */
+export type TestUrls = { exit: string; review: string; exitLabel?: string };
+
 /** Top bar shared by every test: title, timer, save status, full screen, exit and submit with confirmation. */
 export function TestShell({
   title,
@@ -21,6 +24,7 @@ export function TestShell({
   submitting,
   unanswered,
   hideSubmit,
+  exitUrl,
   children,
 }: {
   title: string;
@@ -30,9 +34,10 @@ export function TestShell({
   submitting: boolean;
   unanswered?: number;
   hideSubmit?: boolean;
+  exitUrl: string;
   children: React.ReactNode;
 }) {
-  const { locale, m } = useI18n();
+  const { m } = useI18n();
   const t = m.diag.test;
   const router = useRouter();
   const [exitOpen, setExitOpen] = useState(false);
@@ -109,7 +114,7 @@ export function TestShell({
               className="btn-primary"
               onClick={() => {
                 exitFullscreen();
-                router.push(`/${locale}/welcome/diagnostic`);
+                router.push(exitUrl);
               }}
             >
               {t.leave}

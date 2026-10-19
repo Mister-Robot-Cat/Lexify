@@ -1,6 +1,6 @@
 /**
  * Loads the placeholder content into Firestore.
- *   npm run seed            → courses, lessons, diagnostic tasks, answer keys, default config
+ *   npm run seed            → courses, lessons, diagnostic and practice tasks, answer keys, default config
  *   npm run seed -- --demo  → also creates demo accounts (emulators only)
  * Existing documents with the same ids are overwritten; other documents are left alone.
  */
@@ -9,6 +9,7 @@ import { getAuth } from "firebase-admin/auth";
 import { getFirestore } from "firebase-admin/firestore";
 import { seedCourses, seedLessons } from "../content/catalog";
 import { seedAnswerKeys, seedDiagnosticTasks } from "../content/diagnostic";
+import { seedPracticeAnswerKeys, seedPracticeTasks } from "../content/practice";
 
 const raw = process.env.FIREBASE_SERVICE_ACCOUNT;
 const emulator = !!process.env.FIRESTORE_EMULATOR_HOST;
@@ -31,11 +32,12 @@ for (const l of seedLessons) {
   batch.set(db.collection("lessonBodies").doc(l.id), { body });
 }
 for (const t of seedDiagnosticTasks) batch.set(db.collection("diagnosticTasks").doc(t.id), t);
-for (const [id, key] of Object.entries(seedAnswerKeys)) batch.set(db.collection("answerKeys").doc(id), key);
+for (const t of seedPracticeTasks) batch.set(db.collection("practiceTasks").doc(t.id), t);
+for (const [id, key] of Object.entries({ ...seedAnswerKeys, ...seedPracticeAnswerKeys })) batch.set(db.collection("answerKeys").doc(id), key);
 batch.set(db.doc("config/diagnostic"), { paywall: { reading: false, listening: false, writing: false, speaking: false } }, { merge: true });
 batch.set(db.doc("config/ai"), { monthlyLimit: 40 }, { merge: true });
 await batch.commit();
-console.log(`Seeded ${seedCourses.length} courses, ${seedLessons.length} lessons, ${seedDiagnosticTasks.length} diagnostic tasks.`);
+console.log(`Seeded ${seedCourses.length} courses, ${seedLessons.length} lessons, ${seedDiagnosticTasks.length} diagnostic tasks, ${seedPracticeTasks.length} practice tasks.`);
 
 if (process.argv.includes("--demo")) {
   if (!emulator) {

@@ -15,7 +15,7 @@ export function useAutosave(attemptId: string, payload: Record<string, unknown>,
     const id = setTimeout(async () => {
       setState("saving");
       try {
-        await postJson("/api/diagnostic/save", { attemptId, ...JSON.parse(json) });
+        await postJson("/api/attempts/save", { attemptId, ...JSON.parse(json) });
         last.current = json;
         setState("saved");
       } catch {
