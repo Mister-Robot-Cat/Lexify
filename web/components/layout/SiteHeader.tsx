@@ -7,6 +7,7 @@ import { Logo } from "@/components/Logo";
 import { useI18n } from "@/components/i18n";
 import { useSession } from "@/components/useSession";
 import { LanguageSwitcher } from "./LanguageSwitcher";
+import { logout, UserMenu } from "./UserMenu";
 
 export function SiteHeader() {
   const { locale, m } = useI18n();
@@ -51,9 +52,12 @@ export function SiteHeader() {
           {loading ? (
             <span className="h-10 w-28" />
           ) : user ? (
-            <Link href={`${home}/app`} className="btn-primary">
-              {m.nav.cabinet}
-            </Link>
+            <>
+              <Link href={`${home}/app`} className="btn-primary">
+                {m.nav.cabinet}
+              </Link>
+              <UserMenu user={user} />
+            </>
           ) : (
             <>
               <Link href={`${home}/login`} className="btn px-4 text-ink hover:bg-sand">
@@ -90,9 +94,14 @@ export function SiteHeader() {
             ))}
             <div className="mt-3 flex flex-col gap-2 border-t border-line pt-4">
               {user ? (
-                <Link href={`${home}/app`} onClick={() => setOpen(false)} className="btn-primary btn-lg">
-                  {m.nav.cabinet}
-                </Link>
+                <>
+                  <Link href={`${home}/app`} onClick={() => setOpen(false)} className="btn-primary btn-lg">
+                    {m.nav.cabinet}
+                  </Link>
+                  <button onClick={() => logout(locale)} className="btn-ghost btn-lg">
+                    {m.nav.logout}
+                  </button>
+                </>
               ) : (
                 <>
                   <Link href={`${home}/signup`} onClick={() => setOpen(false)} className="btn-primary btn-lg">

@@ -1,6 +1,7 @@
 import { NextResponse } from "next/server";
+import { getSessionUser } from "@/server/session";
 
-// Replaced by the real session lookup in the account stage.
-export function GET() {
-  return NextResponse.json({ user: null });
+export async function GET() {
+  const user = await getSessionUser();
+  return NextResponse.json({ user }, { headers: { "cache-control": "private, no-store" } });
 }
