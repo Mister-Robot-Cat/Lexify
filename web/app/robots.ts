@@ -1,14 +1,14 @@
-import { MetadataRoute } from 'next'
+import type { MetadataRoute } from "next";
+import { SITE_URL } from "@/lib/site";
 
 export default function robots(): MetadataRoute.Robots {
-  const baseUrl = process.env.NEXT_PUBLIC_SITE_URL || 'https://lexify.app'
-
   return {
     rules: {
-      userAgent: '*',
-      allow: '/',
-      disallow: ['/api/'],
+      userAgent: "*",
+      allow: "/",
+      disallow: ["/api/", "/*/app", "/*/admin", "/*/buy", "/*/login", "/*/signup", "/*/reset-password", "/*/verify-email"],
     },
-    sitemap: `${baseUrl}/sitemap.xml`,
-  }
+    sitemap: `${SITE_URL}/sitemap.xml`,
+    host: SITE_URL,
+  };
 }

@@ -2,6 +2,8 @@
 
 **A multilingual Telegram bot for learning vocabulary, powered by Groq AI with themed word packs and spaced repetition.**
 
+> The IELTS website and learning platform lives in [`web/`](web/README.md): how to run it, deploy it and add content is described there.
+
 ---
 
 ## Features

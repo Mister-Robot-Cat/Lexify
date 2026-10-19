@@ -1,74 +1,140 @@
-@tailwind base;
-@tailwind components;
-@tailwind utilities;
+@import "tailwindcss";
 
-@layer base {
-  :root {
-    --font-inter: 'Inter', system-ui, sans-serif;
+@import "@fontsource-variable/manrope";
+@import "@fontsource-variable/fraunces";
+
+/*
+ * Lexify identity: deep ink navy, warm paper, amber accent.
+ * Each IELTS skill has its own hue so the dashboards read at a glance.
+ */
+@theme {
+  --font-sans: "Manrope Variable", ui-sans-serif, system-ui, sans-serif;
+  /* Fraunces has no Cyrillic, so Russian headings fall back to Manrope. */
+  --font-display: "Fraunces Variable", "Manrope Variable", ui-serif, Georgia, serif;
+
+  --color-ink: #0f1b3d;
+  --color-ink-soft: #24335f;
+  --color-paper: #faf7f1;
+  --color-surface: #ffffff;
+  --color-sand: #f2ede3;
+  --color-line: #e6e0d4;
+  --color-muted: #5d667a;
+  --color-amber: #f2a33a;
+  --color-amber-deep: #c8780f;
+  --color-amber-soft: #fdf0db;
+
+  --color-reading: #2f7d6d;
+  --color-reading-soft: #e3f1ed;
+  --color-listening: #6b5bd6;
+  --color-listening-soft: #ebe8fb;
+  --color-writing: #d0603a;
+  --color-writing-soft: #fbe8e1;
+  --color-speaking: #2e7fc1;
+  --color-speaking-soft: #e2eef8;
+
+  --color-success: #2f855a;
+  --color-danger: #c53030;
+
+  --radius-card: 1.25rem;
+  --shadow-card: 0 1px 2px rgb(15 27 61 / 0.04), 0 8px 24px -12px rgb(15 27 61 / 0.12);
+  --shadow-lift: 0 2px 4px rgb(15 27 61 / 0.05), 0 18px 40px -18px rgb(15 27 61 / 0.25);
+}
+
+/* Fraunces has no Cyrillic: mixing it with Manrope inside one Russian heading looks broken. */
+html[lang="ru"] {
+  --font-display: "Manrope Variable", ui-sans-serif, system-ui, sans-serif;
+}
+
+html {
+  -webkit-text-size-adjust: 100%;
+  scroll-behavior: smooth;
+}
+
+body {
+  background: var(--color-paper);
+  color: var(--color-ink);
+  font-family: var(--font-sans);
+  -webkit-font-smoothing: antialiased;
+}
+
+:focus-visible {
+  outline: 2px solid var(--color-amber-deep);
+  outline-offset: 2px;
+}
+
+@utility container-page {
+  @apply mx-auto w-full max-w-6xl px-4 sm:px-6;
+}
+
+@utility card {
+  @apply rounded-[var(--radius-card)] border border-line bg-surface shadow-[var(--shadow-card)];
+}
+
+@utility btn {
+  @apply inline-flex items-center justify-center gap-2 rounded-full px-5 py-2.5 text-sm font-semibold transition active:scale-[0.98] disabled:cursor-not-allowed disabled:opacity-50;
+}
+
+@utility btn-primary {
+  @apply btn bg-ink text-white hover:bg-ink-soft;
+}
+
+@utility btn-accent {
+  @apply btn bg-amber text-ink hover:bg-[#f5b257];
+}
+
+@utility btn-ghost {
+  @apply btn border border-line bg-surface text-ink hover:border-ink/30;
+}
+
+@utility btn-lg {
+  @apply px-7 py-3.5 text-base;
+}
+
+@utility input {
+  @apply w-full rounded-xl border border-line bg-surface px-4 py-3 text-base text-ink placeholder:text-muted/70 focus:border-ink/40 focus:outline-none focus:ring-2 focus:ring-amber/40;
+}
+
+@utility label {
+  @apply mb-1.5 block text-sm font-semibold text-ink;
+}
+
+@utility eyebrow {
+  @apply text-xs font-bold uppercase tracking-[0.14em] text-amber-deep;
+}
+
+@utility prose-lx {
+  @apply text-[15px] leading-7 text-ink/90;
+  & h2 {
+    @apply mt-8 mb-3 font-display text-2xl font-semibold text-ink;
   }
-  
-  html {
-    scroll-behavior: smooth;
+  & h3 {
+    @apply mt-6 mb-2 text-lg font-bold text-ink;
   }
-  
+  & p {
+    @apply my-3;
+  }
+  & ul {
+    @apply my-3 list-disc space-y-1 pl-6;
+  }
+  & ol {
+    @apply my-3 list-decimal space-y-1 pl-6;
+  }
+  & strong {
+    @apply font-bold text-ink;
+  }
+  & blockquote {
+    @apply my-4 rounded-xl border-l-4 border-amber bg-amber-soft/60 px-4 py-3;
+  }
+  & a {
+    @apply font-semibold text-ink underline decoration-amber decoration-2 underline-offset-2;
+  }
+}
+
+@media print {
+  .no-print {
+    display: none !important;
+  }
   body {
-    @apply bg-background text-white;
-  }
-
-  @media (prefers-reduced-motion: reduce) {
-    *,
-    *::before,
-    *::after {
-      animation-duration: 0.01ms !important;
-      animation-iteration-count: 1 !important;
-      transition-duration: 0.01ms !important;
-      scroll-behavior: auto !important;
-    }
-  }
-}
-
-@layer components {
-  .gradient-text {
-    @apply bg-clip-text text-transparent bg-gradient-to-r from-primary via-accent-cyan to-accent-purple;
-  }
-  
-  .glass-card {
-    @apply bg-surface/80 backdrop-blur-xl border border-white/10 rounded-2xl;
-  }
-  
-  .glow-button {
-    @apply relative overflow-hidden transition-all duration-300;
-    box-shadow: 0 0 20px rgba(99, 102, 241, 0.3);
-  }
-  
-  .glow-button:hover {
-    box-shadow: 0 0 40px rgba(99, 102, 241, 0.5);
-  }
-  
-  .feature-card {
-    @apply glass-card p-6 hover:bg-surface-light/50 transition-all duration-300;
-  }
-  
-  .feature-card:hover {
-    @apply border-primary/30;
-    transform: translateY(-4px);
-  }
-}
-
-@layer utilities {
-  .text-balance {
-    text-wrap: balance;
-  }
-  
-  .animate-delay-100 {
-    animation-delay: 100ms;
-  }
-  
-  .animate-delay-200 {
-    animation-delay: 200ms;
-  }
-  
-  .animate-delay-300 {
-    animation-delay: 300ms;
+    background: #fff;
   }
 }

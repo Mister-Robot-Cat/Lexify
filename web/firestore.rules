@@ -1,0 +1,61 @@
+rules_version = '2';
+
+// Lexify security model:
+// - Everything that decides a score, access or a role (attempts, bands,
+//   orders, access grants, roles, answer keys, AI usage) is written only by
+//   the server through the Admin SDK, which bypasses these rules.
+// - Clients may read their own data and public catalogue metadata.
+// - The only client write allowed is cosmetic profile fields.
+service cloud.firestore {
+  match /databases/{database}/documents {
+    function signedIn() { return request.auth != null; }
+    function isOwner(uid) { return signedIn() && request.auth.uid == uid; }
+
+    // Public profile document: the owner may change only name and language.
+    match /users/{uid} {
+      allow read: if isOwner(uid);
+      allow update: if isOwner(uid)
+        && request.resource.data.diff(resource.data).affectedKeys().hasOnly(['displayName', 'locale', 'updatedAt'])
+        && (!('displayName' in request.resource.data) || (request.resource.data.displayName is string && request.resource.data.displayName.size() <= 80))
+        && (!('locale' in request.resource.data) || request.resource.data.locale in ['az', 'en', 'ru']);
+      allow create, delete: if false;
+
+      // Role, access grants, diagnostic assignment and mode: server only.
+      match /private/{doc} {
+        allow read: if isOwner(uid);
+        allow write: if false;
+      }
+    }
+
+    match /attempts/{id} {
+      allow read: if signedIn() && resource.data.uid == request.auth.uid;
+      allow write: if false;
+    }
+
+    match /progress/{uid} {
+      allow read: if isOwner(uid);
+      allow write: if false;
+    }
+
+    match /orders/{id} {
+      allow read: if signedIn() && resource.data.uid == request.auth.uid;
+      allow write: if false;
+    }
+
+    // Catalogue metadata is public; bodies of paid lessons are served by the server after an access check.
+    match /courses/{id} {
+      allow read: if resource.data.published == true;
+      allow write: if false;
+    }
+    match /lessons/{id} {
+      allow read: if resource.data.published == true;
+      allow write: if false;
+    }
+
+    // Everything else (answer keys, lesson bodies, diagnostic tasks, promo codes,
+    // AI usage, broadcasts, config) is server-only.
+    match /{document=**} {
+      allow read, write: if false;
+    }
+  }
+}

@@ -1,32 +1,27 @@
-import { MetadataRoute } from 'next'
+import type { MetadataRoute } from "next";
+import { locales } from "@/lib/i18n/config";
+import { SITE_URL } from "@/lib/site";
+import { getLessonList } from "@/server/content";
 
-export default function sitemap(): MetadataRoute.Sitemap {
-  const baseUrl = process.env.NEXT_PUBLIC_SITE_URL || 'https://lexify.app'
+export const revalidate = 3600;
 
-  return [
-    {
-      url: baseUrl,
-      lastModified: new Date(),
-      changeFrequency: 'daily',
-      priority: 1.0,
-    },
-    {
-      url: `${baseUrl}/login`,
-      lastModified: new Date(),
-      changeFrequency: 'monthly',
-      priority: 0.8,
-    },
-    {
-      url: `${baseUrl}/dashboard`,
-      lastModified: new Date(),
-      changeFrequency: 'daily',
-      priority: 0.9,
-    },
-    {
-      url: `${baseUrl}/dashboard/library`,
-      lastModified: new Date(),
-      changeFrequency: 'daily',
-      priority: 0.9,
-    },
-  ]
+export default async function sitemap(): Promise<MetadataRoute.Sitemap> {
+  const lessons = (await getLessonList()).filter((l) => l.free);
+  const paths = [
+    { path: "", priority: 1 },
+    { path: "/preview", priority: 0.8 },
+    { path: "/welcome/diagnostic", priority: 0.8 },
+    ...lessons.map((l) => ({ path: `/preview/lessons/${l.id}`, priority: 0.6 })),
+    { path: "/terms", priority: 0.2 },
+    { path: "/privacy", priority: 0.2 },
+    { path: "/refund-policy", priority: 0.2 },
+  ];
+  return paths.flatMap(({ path, priority }) =>
+    locales.map((locale) => ({
+      url: `${SITE_URL}/${locale}${path}`,
+      changeFrequency: "weekly" as const,
+      priority,
+      alternates: { languages: Object.fromEntries(locales.map((l) => [l, `${SITE_URL}/${l}${path}`])) },
+    })),
+  );
 }
