@@ -1,8 +1,9 @@
 /**
  * Loads the placeholder content into Firestore.
- *   npm run seed            → courses, lessons, diagnostic and practice tasks, answer keys, default config
- *   npm run seed -- --demo  → also creates demo accounts (emulators only)
- * Existing documents with the same ids are overwritten; other documents are left alone.
+ *   npm run seed             → courses, lessons, diagnostic and practice tasks, answer keys, default config
+ *   npm run seed -- --demo   → also creates demo accounts and promo codes (emulators only)
+ *   npm run seed -- --force  → also overwrites documents that already exist
+ * Without --force only missing documents are written, so edits made in the admin panel are kept.
  */
 import { cert, initializeApp } from "firebase-admin/app";
 import { getAuth } from "firebase-admin/auth";
@@ -24,20 +25,30 @@ initializeApp({
 });
 const db = getFirestore();
 
-const batch = db.batch();
-for (const c of seedCourses) batch.set(db.collection("courses").doc(c.id), c);
+const force = process.argv.includes("--force");
+const writes: [FirebaseFirestore.DocumentReference, FirebaseFirestore.DocumentData][] = [];
+for (const c of seedCourses) writes.push([db.collection("courses").doc(c.id), c]);
 for (const l of seedLessons) {
   const { body, ...meta } = l;
-  batch.set(db.collection("lessons").doc(l.id), meta);
-  batch.set(db.collection("lessonBodies").doc(l.id), { body });
+  writes.push([db.collection("lessons").doc(l.id), meta]);
+  writes.push([db.collection("lessonBodies").doc(l.id), { body }]);
 }
-for (const t of seedDiagnosticTasks) batch.set(db.collection("diagnosticTasks").doc(t.id), t);
-for (const t of seedPracticeTasks) batch.set(db.collection("practiceTasks").doc(t.id), t);
-for (const [id, key] of Object.entries({ ...seedAnswerKeys, ...seedPracticeAnswerKeys })) batch.set(db.collection("answerKeys").doc(id), key);
-batch.set(db.doc("config/diagnostic"), { paywall: { reading: false, listening: false, writing: false, speaking: false } }, { merge: true });
-batch.set(db.doc("config/ai"), { monthlyLimit: 40 }, { merge: true });
+for (const t of seedDiagnosticTasks) writes.push([db.collection("diagnosticTasks").doc(t.id), t]);
+for (const t of seedPracticeTasks) writes.push([db.collection("practiceTasks").doc(t.id), t]);
+for (const [id, key] of Object.entries({ ...seedAnswerKeys, ...seedPracticeAnswerKeys })) writes.push([db.collection("answerKeys").doc(id), key]);
+writes.push([db.doc("config/diagnostic"), { paywall: { reading: false, listening: false, writing: false, speaking: false } }]);
+writes.push([db.doc("config/ai"), { monthlyLimit: 40 }]);
+
+const existing = new Set((await db.getAll(...writes.map(([ref]) => ref))).filter((s) => s.exists).map((s) => s.ref.path));
+const batch = db.batch();
+let written = 0;
+for (const [ref, data] of writes) {
+  if (!force && existing.has(ref.path)) continue;
+  batch.set(ref, data);
+  written++;
+}
 await batch.commit();
-console.log(`Seeded ${seedCourses.length} courses, ${seedLessons.length} lessons, ${seedDiagnosticTasks.length} diagnostic tasks, ${seedPracticeTasks.length} practice tasks.`);
+console.log(`Wrote ${written} of ${writes.length} seed documents${force ? "" : " (existing ones kept; --force overwrites)"}.`);
 
 if (process.argv.includes("--demo")) {
   if (!emulator) {

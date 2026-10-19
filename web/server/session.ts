@@ -1,6 +1,7 @@
 import "server-only";
 import { cookies } from "next/headers";
 import { redirect } from "next/navigation";
+import { cache } from "react";
 import type { DecodedIdToken } from "firebase-admin/auth";
 import type { Locale } from "@/lib/i18n/config";
 import { adminAuth, isFirebaseConfigured } from "./firebase-admin";
@@ -26,24 +27,30 @@ function toUser(t: DecodedIdToken): SessionUser {
   };
 }
 
-/**
- * Reads and verifies the session cookie. `checkRevoked` costs one extra Auth
- * call, so it is used where it matters: admin access and money.
- */
-export async function getSessionUser(opts: { checkRevoked?: boolean } = {}): Promise<SessionUser | null> {
+// One verification per request and mode, however many layouts and pages ask.
+const verify = cache(async (checkRevoked: boolean): Promise<SessionUser | null> => {
   if (!isFirebaseConfigured()) return null;
   const value = (await cookies()).get(SESSION_COOKIE)?.value;
   if (!value) return null;
   try {
-    return toUser(await adminAuth().verifySessionCookie(value, opts.checkRevoked ?? false));
+    return toUser(await adminAuth().verifySessionCookie(value, checkRevoked));
   } catch {
     return null;
   }
+});
+
+/**
+ * Reads and verifies the session cookie. `checkRevoked` costs one extra Auth
+ * call and also rejects blocked accounts and sessions ended by a role change,
+ * so the cabinet, the API and the admin area use it; public pages don't.
+ */
+export async function getSessionUser(opts: { checkRevoked?: boolean } = {}): Promise<SessionUser | null> {
+  return verify(opts.checkRevoked ?? false);
 }
 
 /** For pages: sends guests to login and unverified users to the verify-email screen. */
 export async function requireUser(locale: Locale, nextPath: string, opts: { verified?: boolean } = { verified: true }) {
-  const user = await getSessionUser();
+  const user = await getSessionUser({ checkRevoked: true });
   const next = encodeURIComponent(nextPath);
   if (!user) redirect(`/${locale}/login?next=${next}`);
   if (opts.verified !== false && !user.emailVerified) redirect(`/${locale}/verify-email?next=${next}`);

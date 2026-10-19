@@ -52,7 +52,7 @@ export function route<C>(handler: Handler<C>): Handler<C> {
 }
 
 export async function needUser(opts: { verified?: boolean; checkRevoked?: boolean } = {}): Promise<SessionUser> {
-  const user = await getSessionUser({ checkRevoked: opts.checkRevoked });
+  const user = await getSessionUser({ checkRevoked: opts.checkRevoked ?? true });
   if (!user) throw new HttpError(401, "unauthenticated");
   if (opts.verified !== false && !user.emailVerified) throw new HttpError(403, "email_not_verified");
   return user;

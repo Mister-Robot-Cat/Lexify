@@ -1,36 +1,269 @@
-This is a [Next.js](https://nextjs.org) project bootstrapped with [`create-next-app`](https://nextjs.org/docs/app/api-reference/cli/create-next-app).
+# Lexify Web
 
-## Getting Started
+Сайт и учебная платформа для подготовки к IELTS Academic: витрина, аккаунты, бесплатная диагностика по четырём навыкам, оплата курсов, кабинет ученика и админка. Языки интерфейса: азербайджанский, английский, русский.
 
-First, run the development server:
+**Стек:** Next.js 16 (App Router), React 19, Tailwind CSS 4, Firebase (Auth, Firestore, Storage), firebase-admin на сервере. Сервер — это Route Handlers Next.js на Vercel (`app/api/**`), вся серверная логика лежит в `server/`.
 
-```bash
-npm run dev
-# or
-yarn dev
-# or
-pnpm dev
-# or
-bun dev
+## Содержание
+
+1. [Как устроен проект](#как-устроен-проект)
+2. [Запуск локально](#запуск-локально)
+3. [Деплой на Vercel и Firebase](#деплой-на-vercel-и-firebase)
+4. [Как добавлять контент](#как-добавлять-контент)
+5. [Подключение ИИ и распознавания речи](#подключение-ии-и-распознавания-речи)
+6. [Подключение оплаты](#подключение-оплаты)
+7. [Безопасность](#безопасность)
+8. [Проверки перед релизом](#проверки-перед-релизом)
+
+## Как устроен проект
+
+```
+app/[locale]/(site)    витрина, /preview, юридические страницы, покупка, аккаунт
+app/[locale]/(auth)    вход, регистрация, подтверждение email, сброс пароля
+app/[locale]/(test)    экраны тестов (диагностика и практика) на весь экран
+app/[locale]/(app)     кабинет ученика /app
+app/[locale]/(admin)   админка /admin (только для роли admin)
+app/api/**             серверные обработчики: оценивание, оплата, админка
+server/**              серверная логика (firebase-admin, проверка прав, подсчёт баллов)
+content/**             стартовые заглушки: курсы, уроки, задания, ключи, юр. тексты
+messages/**            тексты интерфейса на трёх языках (messages/admin — тексты админки)
+scripts/               seed (загрузка контента) и make-admin
+firestore.rules        правила Firestore: клиент не может писать баллы, доступы и роли
 ```
 
-Open [http://localhost:3000](http://localhost:3000) with your browser to see the result.
+Firestore — основное хранилище. Пока база пустая, публичные страницы показывают заглушки из `content/`.
 
-You can start editing the page by modifying `app/page.tsx`. The page auto-updates as you edit the file.
+| Коллекция | Что хранит | Кто пишет |
+|---|---|---|
+| `users/{uid}` | профиль: имя, язык | пользователь (только имя и язык) |
+| `users/{uid}/private/state` | роль, доступы к курсам, личный лимит ИИ | сервер |
+| `users/{uid}/private/diagnostic` | выданные задания, режим, статус разделов | сервер |
+| `attempts/{id}` | попытки тестов, ответы, баллы, отзыв ИИ | сервер |
+| `courses`, `lessons`, `lessonBodies` | курсы, описания уроков, тексты уроков | админка |
+| `diagnosticTasks`, `practiceTasks` | задания тестов (без ответов) | админка |
+| `answerKeys/{taskId}` | ключи ответов, никогда не уходят в браузер | админка |
+| `orders`, `promoCodes` | заказы, промокоды и их использования | сервер, админка |
+| `broadcasts` | объявления в кабинете | админка |
+| `config/ai`, `config/diagnostic` | лимит ИИ, платные разделы диагностики | админка |
+| `aiUsage`, `adminLog` | расход ИИ по месяцам, журнал действий админов | сервер |
 
-This project uses [`next/font`](https://nextjs.org/docs/app/building-your-application/optimizing/fonts) to automatically optimize and load [Geist](https://vercel.com/font), a new font family for Vercel.
+## Запуск локально
 
-## Learn More
+Нужны Node.js 20+ и Java 11+ (Java нужна эмуляторам Firebase). Настоящий проект Firebase для локальной работы не нужен: всё работает на эмуляторах.
 
-To learn more about Next.js, take a look at the following resources:
+```bash
+cd web
+npm install
+cp .env.example .env.local
+```
 
-- [Next.js Documentation](https://nextjs.org/docs) - learn about Next.js features and API.
-- [Learn Next.js](https://nextjs.org/learn) - an interactive Next.js tutorial.
+В `.env.local` раскомментируйте блок «Local emulators»:
 
-You can check out [the Next.js GitHub repository](https://github.com/vercel/next.js) - your feedback and contributions are welcome!
+```
+NEXT_PUBLIC_FIREBASE_EMULATORS=true
+NEXT_PUBLIC_FIREBASE_PROJECT_ID=demo-lexify
+NEXT_PUBLIC_FIREBASE_STORAGE_BUCKET=demo-lexify.appspot.com
+FIREBASE_AUTH_EMULATOR_HOST=127.0.0.1:9099
+FIRESTORE_EMULATOR_HOST=127.0.0.1:8080
+FIREBASE_STORAGE_EMULATOR_HOST=127.0.0.1:9199
+```
 
-## Deploy on Vercel
+Дальше в трёх терминалах:
 
-The easiest way to deploy your Next.js app is to use the [Vercel Platform](https://vercel.com/new?utm_medium=default-template&filter=next.js&utm_source=create-next-app&utm_campaign=create-next-app-readme) from the creators of Next.js.
+```bash
+npm run emulators          # 1. эмуляторы Auth, Firestore, Storage (интерфейс на http://localhost:4000)
+npm run seed -- --demo     # 2. один раз: контент-заглушки, демо-аккаунты и промокоды
+npm run dev                # 3. сайт на http://localhost:3000
+```
 
-Check out our [Next.js deployment documentation](https://nextjs.org/docs/app/building-your-application/deploying) for more details.
+Демо-аккаунты (создаются только на эмуляторах):
+
+| Email | Пароль | Роль |
+|---|---|---|
+| `student@lexify.test` | `lexify123` | ученик |
+| `admin@lexify.test` | `lexify123` | администратор, админка на `/ru/admin` |
+
+Демо-промокоды: `WELCOME20` (−20%) и `LEXIFY100` (−100%).
+
+Письма подтверждения email и сброса пароля на эмуляторе не отправляются: ссылки из них видны в интерфейсе эмулятора (http://localhost:4000/auth) и в терминале с эмуляторами.
+
+Данные эмуляторов не сохраняются между запусками. Чтобы сохранять, запускайте `npx firebase emulators:start --project demo-lexify --import=.emulator-data --export-on-exit`.
+
+## Деплой на Vercel и Firebase
+
+### 1. Проект Firebase
+
+1. Создайте проект в [Firebase console](https://console.firebase.google.com).
+2. **Authentication → Sign-in method:** включите Email/Password.
+3. **Authentication → Settings → Authorized domains:** добавьте домен Vercel (`your-app.vercel.app`) и свой домен, когда он появится.
+4. **Authentication → Templates:** в шаблонах «Email address verification» и «Password reset» нажмите карандаш → «Customize action URL» и укажите `https://ВАШ-ДОМЕН/az/auth/action`. Тогда ссылки из писем открываются на сайте, на языке пользователя.
+5. **Firestore Database:** создайте базу в production mode (регион ближе к пользователям, например `europe-west`).
+6. **Storage:** создайте бакет (там хранятся записи Speaking).
+7. Опубликуйте правила из репозитория:
+   ```bash
+   cd web
+   npx firebase login
+   npx firebase deploy --only firestore:rules,firestore:indexes,storage --project ВАШ_PROJECT_ID
+   ```
+8. **Project settings → General → Your apps:** добавьте Web app, из его конфига возьмите значения для `NEXT_PUBLIC_FIREBASE_*`.
+9. **Project settings → Service accounts → Generate new private key:** скачается JSON. Это `FIREBASE_SERVICE_ACCOUNT`. Храните его только в переменных окружения, никогда не коммитьте.
+
+### 2. Проект Vercel
+
+1. Импортируйте репозиторий в Vercel и укажите **Root Directory: `web`**. Framework определится сам (Next.js).
+2. **Settings → Environment Variables:** добавьте переменные из `.env.example`:
+   - `NEXT_PUBLIC_SITE_URL` — адрес сайта, например `https://your-app.vercel.app`;
+   - `NEXT_PUBLIC_FIREBASE_API_KEY`, `..._AUTH_DOMAIN`, `..._PROJECT_ID`, `..._STORAGE_BUCKET`, `..._APP_ID`;
+   - `FIREBASE_SERVICE_ACCOUNT` — содержимое JSON одной строкой или в base64 (`base64 -w0 key.json`);
+   - `NEXT_PUBLIC_SUPPORT_EMAIL` и ссылки на соцсети (по желанию);
+   - `NEXT_PUBLIC_PAYMENTS_ENABLED=false`, пока оплата не подключена;
+   - ключи ИИ, когда выберете модель (см. ниже).
+   Блок эмуляторов на Vercel **не** добавляйте.
+3. Нажмите Deploy. После смены переменных нужен Redeploy.
+
+### 3. Первый запуск
+
+На своём компьютере положите в `web/.env.local` те же `NEXT_PUBLIC_FIREBASE_PROJECT_ID` и `FIREBASE_SERVICE_ACCOUNT` (без переменных эмуляторов) и выполните:
+
+```bash
+npm run seed                                # загрузить контент-заглушки в настоящую базу
+```
+
+Зарегистрируйтесь на сайте своим email и сделайте себя администратором:
+
+```bash
+npm run make-admin -- you@example.com            # выдать роль admin
+npm run make-admin -- you@example.com --remove   # забрать
+```
+
+После этого выйдите и войдите снова: роль попадает в сессию при входе. Дальше роли можно менять прямо в админке (Пользователи → Сделать админом).
+
+`npm run seed` можно запускать повторно: он дописывает только недостающие документы и не трогает то, что вы изменили в админке. `npm run seed -- --force` перезаписывает всё заглушками.
+
+## Как добавлять контент
+
+Почти всё редактируется в админке (`/ru/admin`), без деплоя.
+
+### Курсы и уроки (Админка → Курсы и уроки)
+
+- **Курс:** id (латиница, цифры, дефисы, потом не меняется), название и описание на трёх языках, навыки, порядок, флаг «Опубликован». Доступ покупается на конкретный курс: платные уроки и задания практики открываются тем, у кого есть доступ к их курсу.
+- **Урок:** курс, навык, порядок, минуты, название и краткое описание на трёх языках, текст в Markdown (`## заголовок`, `- список`, `**жирный**`, ссылки, таблицы). HTML в тексте не выполняется. «Бесплатный урок» виден всем, остальные только с оплаченным доступом: текст платного урока сервер не отдаёт без доступа.
+- Если перевод не заполнен, показывается английский текст.
+
+### Задания диагностики и практики (Админка → Тесты и задания)
+
+Задание редактируется как JSON (слева) плюс ключ ответов (справа). Кнопки «+ Reading» и т.п. создают новое задание как копию существующего, выключенную, чтобы было от чего оттолкнуться.
+
+- **Диагностика:** каждому новому пользователю выдаётся случайное *активное* задание в каждом разделе. В каждом разделе всегда должно оставаться хотя бы одно активное (админка не даст выключить последнее).
+- **Практика:** дополнительно поля `kind` (`"exercise"` или `"mock"`), `order`, `courseIds` (для каких курсов) и `free` (открыто без оплаты).
+- **Режимы:** у каждой группы вопросов, задания Writing и части Speaking есть флаг `light`. В режиме Light показываются только элементы с `light: true`, в Full показывается всё. `durations` задаёт минуты для каждого режима.
+
+Пример задания Reading (сокращённо):
+
+```json
+{
+  "id": "reading-coffee-history",
+  "section": "reading",
+  "title": "The history of coffee",
+  "active": true,
+  "durations": { "light": 20, "full": 30 },
+  "passages": [{ "id": "p1", "title": "The history of coffee", "text": "Paragraph one...\n\nParagraph two..." }],
+  "groups": [
+    {
+      "id": "g1",
+      "typeLabel": "True / False / Not Given",
+      "instructions": "Do the following statements agree with the information in the passage?",
+      "passageId": "p1",
+      "light": true,
+      "questions": [
+        { "id": "q1", "number": 1, "type": "tfng", "prompt": "Coffee was first grown in Europe." },
+        { "id": "q2", "number": 2, "type": "gap", "prompt": "Coffee houses were called schools of ____.", "maxWords": 1 }
+      ]
+    }
+  ]
+}
+```
+
+И его ключ ответов (все допустимые варианты, регистр и лишние пробелы не важны):
+
+```json
+{ "answers": { "q1": ["false"], "q2": ["wisdom"] } }
+```
+
+Типы вопросов: `tfng`, `ynng`, `mcq` (нужны `options`), `match` (нужны `options`), `gap` (`maxWords` — лимит слов).
+
+- **Listening:** вместо `passages` поле `audio`: `[{ "id": "s1", "title": "Section 1", "url": "/audio/my-file.mp3", "transcript": "..." }]`. Положите mp3 в `web/public/audio/` и задеплойте, либо укажите полный https-адрес файла на любом CDN. Нынешние аудио — синтезированные заглушки, замените их записями дикторов.
+- **Writing:** поле `writing`: `[{ "id": "task1", "light": false, "prompt": "...", "minWords": 150, "chart": {...} }, { "id": "task2", "light": true, "prompt": "...", "minWords": 250 }]`. Ключ не нужен, оценивает ИИ.
+- **Speaking:** поле `speaking`: части 1–3 с вопросами, `answerSeconds`, для Part 2 `cueCard` и `prepSeconds`. Ключ не нужен.
+
+Сервер проверяет задание при сохранении: обязательные поля, уникальные id вопросов и наличие ответа на каждый вопрос Reading/Listening.
+
+### Остальное в админке
+
+- **Пользователи:** поиск по email или id; роль; блокировка; выдать или забрать доступ к курсу на N дней; личный лимит ИИ; сброс диагностики (пользователь получает новые задания и может пройти заново); заказы и попытки.
+- **Платежи:** все заказы с фильтром по статусу; одобрение или отклонение возвратов (возврат идёт через платёжную систему и забирает купленные дни).
+- **Промокоды:** процент или сумма скидки, срок, общий лимит использований, ограничение по курсам. Каждый пользователь может применить код один раз.
+- **Объявления:** баннер вверху кабинета на трёх языках, для всех, только с тарифом или только без, с датами показа.
+- **Настройки и ИИ:** лимит проверок ИИ на пользователя в месяц, расход за месяц, какие разделы диагностики требуют оплаты.
+- **Обзор:** ключевые цифры и журнал последних действий администраторов.
+
+### Что меняется только в коде
+
+- **Тексты интерфейса:** `messages/en.ts`, `messages/ru.ts`, `messages/az.ts` (английский файл задаёт структуру, TypeScript подскажет, если в переводе чего-то не хватает).
+- **Юридические тексты** (условия, конфиденциальность, возвраты): `content/legal.ts`. Сейчас это заглушки, перед запуском их нужно заменить текстами, проверенными юристом.
+- **Цены и тарифы:** `lib/pricing.ts`.
+- **Логотип:** `components/Logo.tsx`, иконка `app/icon.svg`. **Цвета и шрифты:** `app/globals.css`.
+
+## Подключение ИИ и распознавания речи
+
+Пока ключи не заданы, работает встроенный демо-оценщик: он выдаёт правдоподобные, но ненастоящие баллы. Подходит любой API, совместимый с OpenAI (сам OpenAI, OpenRouter, Groq, Together, локальный vLLM и т.п.):
+
+```
+AI_PROVIDER=openai-compatible
+AI_BASE_URL=https://api.openai.com/v1       # адрес API, куда добавляется /chat/completions
+AI_API_KEY=...
+AI_MODEL=...                                # модель, умеющая отвечать JSON
+
+STT_PROVIDER=openai-compatible
+STT_BASE_URL=https://api.openai.com/v1      # адрес API, куда добавляется /audio/transcriptions
+STT_API_KEY=...
+STT_MODEL=...                               # модель распознавания речи
+```
+
+Ключи задаются только в переменных окружения Vercel и никогда не попадают в браузер. Промпты оценивания лежат в `server/ai/openai-compatible.ts`. Каждая проверка Writing или Speaking расходует одну единицу месячного лимита пользователя (по умолчанию 40, меняется в админке). Если ИИ упал, единица возвращается.
+
+## Подключение оплаты
+
+Сейчас `NEXT_PUBLIC_PAYMENTS_ENABLED=false`: все тарифы оформляются бесплатно, промокоды при этом не расходуются. Для разработки есть `sandbox`-провайдер (тестовая страница оплаты), в production он выключен.
+
+Чтобы подключить настоящую платёжку:
+
+1. Создайте `server/payments/providers/ИМЯ.ts`, реализующий интерфейс `PaymentProvider` из `server/payments/types.ts`:
+   - `createCheckout` создаёт платёж и возвращает ссылку на оплату;
+   - `fetchStatus` спрашивает у платёжки реальный статус заказа;
+   - `parseWebhook` проверяет подпись вебхука и возвращает id заказа и статус;
+   - `refund` возвращает деньги.
+   Образец — `sandbox.ts`.
+2. Зарегистрируйте провайдера в `providerById` в `server/payments/providers/index.ts`.
+3. В кабинете платёжки укажите вебхук `https://ВАШ-ДОМЕН/api/payments/webhook/ИМЯ`.
+4. На Vercel задайте `PAYMENT_PROVIDER=ИМЯ`, секреты платёжки и `NEXT_PUBLIC_PAYMENTS_ENABLED=true`, затем Redeploy.
+
+Доступ открывается только после подтверждения оплаты сервером (вебхук или запрос статуса). Повторный вебхук ничего не меняет. Возврат возможен в течение 7 дней после оплаты: пользователь отправляет запрос из аккаунта, администратор одобряет его в админке.
+
+## Безопасность
+
+- Ключи ответов и подсчёт баллов есть только на сервере. Браузер отправляет ответы, сервер возвращает результат.
+- Баллы, статусы попыток, доступы, заказы и роли пишет только сервер (firebase-admin). Правила Firestore запрещают клиенту любую запись, кроме имени и языка в своём профиле. Тесты правил: `tests/rules.test.ts`.
+- «Одна попытка», выбор режима и платные разделы диагностики проверяются на сервере.
+- Права администратора дают только custom claim `admin` в Firebase Auth, проверяемый на сервере с учётом отозванных сессий. Не-админ получает 404 на любой странице `/admin`, код админки ему не отправляется, а все `/api/admin/*` отвечают 403. Смена роли или блокировка сразу закрывает пользователю кабинет, API и админку.
+- Ключи ИИ, распознавания речи и платёжки хранятся только в серверных переменных окружения. У каждого пользователя есть месячный лимит запросов к ИИ.
+- Записи Speaking хранятся в Storage, доступ к нему у клиента закрыт.
+
+## Проверки перед релизом
+
+```bash
+npm run lint         # ESLint
+npm run typecheck    # TypeScript
+npm run test:rules   # правила Firestore и подсчёт баллов (нужны запущенные эмуляторы)
+npm run build        # production-сборка
+```
