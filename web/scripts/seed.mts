@@ -50,5 +50,9 @@ if (process.argv.includes("--demo")) {
     await db.doc(`users/${user.uid}/private/state`).set({ role: admin ? "admin" : "student" }, { merge: true });
     console.log(`Demo account: ${email} / lexify123${admin ? " (admin)" : ""}`);
   }
+  // Demo promo codes for trying the checkout.
+  await db.doc("promoCodes/WELCOME20").set({ percentOff: 20, active: true, uses: 0, maxUses: null, expiresAt: null, courseIds: [], note: "Demo: 20% off" }, { merge: true });
+  await db.doc("promoCodes/LEXIFY100").set({ percentOff: 100, active: true, uses: 0, maxUses: 100, expiresAt: null, courseIds: [], note: "Demo: free access" }, { merge: true });
+  console.log("Demo promo codes: WELCOME20 (20%), LEXIFY100 (100%)");
 }
 process.exit(0);

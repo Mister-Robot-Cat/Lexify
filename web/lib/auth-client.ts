@@ -43,6 +43,4 @@ export function safeNext(next: string | null, fallback: string): string {
  * Full page load after sign-in or sign-out, so server components and the
  * header re-read the new session cookie.
  */
-export function reloadTo(path: string) {
-  window.location.href = path;
-}
+export { reloadTo } from "./navigate";

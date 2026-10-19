@@ -2,7 +2,7 @@
 
 import Link from "next/link";
 import { useEffect, useRef, useState } from "react";
-import { LayoutDashboard, LogOut, Shield } from "lucide-react";
+import { LayoutDashboard, LogOut, Shield, UserRound } from "lucide-react";
 import { useI18n } from "@/components/i18n";
 import type { SessionUser } from "@/components/useSession";
 
@@ -43,6 +43,9 @@ export function UserMenu({ user }: { user: SessionUser }) {
           <p className="truncate px-3 py-2 text-xs text-muted">{user.email}</p>
           <Link role="menuitem" href={`/${locale}/app`} className="flex items-center gap-2 rounded-xl px-3 py-2.5 text-sm font-semibold hover:bg-sand">
             <LayoutDashboard className="h-4 w-4" /> {m.nav.cabinet}
+          </Link>
+          <Link role="menuitem" href={`/${locale}/account`} className="flex items-center gap-2 rounded-xl px-3 py-2.5 text-sm font-semibold hover:bg-sand">
+            <UserRound className="h-4 w-4" /> {m.nav.account}
           </Link>
           {user.isAdmin && (
             <Link role="menuitem" href={`/${locale}/admin`} className="flex items-center gap-2 rounded-xl px-3 py-2.5 text-sm font-semibold hover:bg-sand">

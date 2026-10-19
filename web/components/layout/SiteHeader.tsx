@@ -98,6 +98,14 @@ export function SiteHeader() {
                   <Link href={`${home}/app`} onClick={() => setOpen(false)} className="btn-primary btn-lg">
                     {m.nav.cabinet}
                   </Link>
+                  <Link href={`${home}/account`} onClick={() => setOpen(false)} className="btn-ghost btn-lg">
+                    {m.nav.account}
+                  </Link>
+                  {user.isAdmin && (
+                    <Link href={`${home}/admin`} onClick={() => setOpen(false)} className="btn-ghost btn-lg">
+                      {m.nav.admin}
+                    </Link>
+                  )}
                   <button onClick={() => logout(locale)} className="btn-ghost btn-lg">
                     {m.nav.logout}
                   </button>

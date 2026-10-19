@@ -13,3 +13,8 @@ export function plural(locale: string, n: number, forms: readonly string[]): str
   if (rule === "few") return forms[1];
   return forms[2] ?? forms[1];
 }
+
+/** "12 March 2026" in the page language. */
+export function formatDate(locale: string, ms: number): string {
+  return new Intl.DateTimeFormat(locale === "az" ? "az-Latn-AZ" : locale, { day: "numeric", month: "long", year: "numeric" }).format(ms);
+}

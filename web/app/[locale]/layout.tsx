@@ -45,7 +45,7 @@ export default async function RootLayout({ children, params }: LayoutProps<"/[lo
   if (!isLocale(locale)) notFound();
   const messages = await getMessages(locale);
   return (
-    <html lang={locale}>
+    <html lang={locale} data-scroll-behavior="smooth">
       <body className="min-h-dvh">
         <I18nProvider locale={locale} messages={messages}>
           {children}
