@@ -1,14 +1,16 @@
 import Link from "next/link";
 import { AlertTriangle } from "lucide-react";
 import { PageTitle } from "@/components/admin/PageTitle";
+import { SeedButton } from "@/components/admin/SeedButton";
 import { fmt } from "@/lib/i18n/format";
 import { PAYMENTS_ENABLED, formatAzn } from "@/lib/pricing";
 import { adminContext } from "@/server/admin/page";
+import { needsSeed } from "@/server/admin/seed";
 import { adminStats, recentLog } from "@/server/admin/settings";
 
 export default async function AdminOverview({ params }: PageProps<"/[locale]/admin">) {
   const { locale, a } = await adminContext(params);
-  const [stats, log] = await Promise.all([adminStats(), recentLog()]);
+  const [stats, log, emptyDb] = await Promise.all([adminStats(), recentLog(), needsSeed()]);
   const s = a.overview.stats;
   const cards: [string, string | number][] = [
     [s.users, stats.users],
@@ -26,6 +28,7 @@ export default async function AdminOverview({ params }: PageProps<"/[locale]/adm
     <>
       <PageTitle title={a.title} />
       <div className="space-y-3">
+        {emptyDb && <SeedButton />}
         {!PAYMENTS_ENABLED && <p className="rounded-xl border border-line bg-sand/60 px-4 py-3 text-sm">{a.overview.paymentsOff}</p>}
         {stats.refundRequests > 0 && (
           <Link

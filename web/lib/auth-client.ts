@@ -7,7 +7,7 @@ import type { Messages } from "@/messages/en";
 import { clientAuth } from "./firebase-client";
 
 /** Exchanges the Firebase user for the server session cookie. */
-export async function startSession(user: User, locale: Locale): Promise<{ locale: Locale; emailVerified: boolean }> {
+export async function startSession(user: User, locale: Locale, retried = false): Promise<{ locale: Locale; emailVerified: boolean }> {
   const idToken = await user.getIdToken(true);
   const res = await fetch("/api/auth/session", {
     method: "POST",
@@ -15,8 +15,11 @@ export async function startSession(user: User, locale: Locale): Promise<{ locale
     body: JSON.stringify({ idToken, locale }),
   });
   if (!res.ok) throw Object.assign(new Error("session_failed"), { code: "session_failed" });
+  const data = await res.json();
+  // The server has just granted a role; a fresh token carries it.
+  if (data.refresh && !retried) return startSession(user, locale, true);
   invalidateSession();
-  return res.json();
+  return data;
 }
 
 export async function signOut() {

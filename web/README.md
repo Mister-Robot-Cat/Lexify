@@ -98,13 +98,8 @@ npm run dev                # 3. сайт на http://localhost:3000
 3. **Authentication → Settings → Authorized domains:** добавьте домен Vercel (`your-app.vercel.app`) и свой домен, когда он появится.
 4. **Authentication → Templates:** в шаблонах «Email address verification» и «Password reset» нажмите карандаш → «Customize action URL» и укажите `https://ВАШ-ДОМЕН/az/auth/action`. Тогда ссылки из писем открываются на сайте, на языке пользователя.
 5. **Firestore Database:** создайте базу в production mode (регион ближе к пользователям, например `europe-west`).
-6. **Storage:** создайте бакет (там хранятся записи Speaking).
-7. Опубликуйте правила из репозитория:
-   ```bash
-   cd web
-   npx firebase login
-   npx firebase deploy --only firestore:rules,firestore:indexes,storage --project ВАШ_PROJECT_ID
-   ```
+6. **Storage:** создайте бакет (там хранятся записи Speaking). Firebase даёт Storage новым проектам только на тарифе Blaze (оплата по факту, с бесплатной квотой). Без бакета работает всё, кроме записи ответов в Speaking.
+7. Правила доступа: откройте **Firestore Database → Rules**, вставьте содержимое файла `firestore.rules` и нажмите Publish. То же самое для **Storage → Rules** с файлом `storage.rules`. Или из терминала: `npx firebase deploy --only firestore:rules,storage --project ВАШ_PROJECT_ID`.
 8. **Project settings → General → Your apps:** добавьте Web app, из его конфига возьмите значения для `NEXT_PUBLIC_FIREBASE_*`.
 9. **Project settings → Service accounts → Generate new private key:** скачается JSON. Это `FIREBASE_SERVICE_ACCOUNT`. Храните его только в переменных окружения, никогда не коммитьте.
 
@@ -116,6 +111,7 @@ npm run dev                # 3. сайт на http://localhost:3000
    - `NEXT_PUBLIC_FIREBASE_API_KEY`, `..._AUTH_DOMAIN`, `..._PROJECT_ID`, `..._STORAGE_BUCKET`, `..._APP_ID`;
    - `FIREBASE_SERVICE_ACCOUNT` — содержимое JSON одной строкой или в base64 (`base64 -w0 key.json`);
    - `NEXT_PUBLIC_SUPPORT_EMAIL` и ссылки на соцсети (по желанию);
+   - `ADMIN_EMAILS` — ваш email (или несколько через запятую): этот адрес станет администратором после регистрации и подтверждения почты;
    - `NEXT_PUBLIC_PAYMENTS_ENABLED=false`, пока оплата не подключена;
    - ключи ИИ, когда выберете модель (см. ниже).
    Блок эмуляторов на Vercel **не** добавляйте.
@@ -123,22 +119,20 @@ npm run dev                # 3. сайт на http://localhost:3000
 
 ### 3. Первый запуск
 
-На своём компьютере положите в `web/.env.local` те же `NEXT_PUBLIC_FIREBASE_PROJECT_ID` и `FIREBASE_SERVICE_ACCOUNT` (без переменных эмуляторов) и выполните:
+1. Зарегистрируйтесь на сайте с адресом из `ADMIN_EMAILS` и подтвердите почту по ссылке из письма. При входе вы станете администратором, админка откроется на `/ru/admin`.
+2. На главной странице админки нажмите **«Загрузить стартовый контент»**. Это записывает курсы, уроки и задания-заглушки в базу. Сделайте это до первого редактирования: пока база пустая, сайт показывает встроенные заглушки, а после первой правки в списках остаются только записи из базы.
+3. Дальше роли можно менять в админке (Пользователи → Сделать админом). Если убрать email из `ADMIN_EMAILS`, роль у человека не пропадёт: снимите её в админке.
+
+То же самое из терминала (нужны `NEXT_PUBLIC_FIREBASE_PROJECT_ID` и `FIREBASE_SERVICE_ACCOUNT` в `web/.env.local`, без переменных эмуляторов):
 
 ```bash
-npm run seed                                # загрузить контент-заглушки в настоящую базу
-```
-
-Зарегистрируйтесь на сайте своим email и сделайте себя администратором:
-
-```bash
+npm run seed                                     # дописать недостающий стартовый контент
+npm run seed -- --force                          # перезаписать всё заглушками
 npm run make-admin -- you@example.com            # выдать роль admin
 npm run make-admin -- you@example.com --remove   # забрать
 ```
 
-После этого выйдите и войдите снова: роль попадает в сессию при входе. Дальше роли можно менять прямо в админке (Пользователи → Сделать админом).
-
-`npm run seed` можно запускать повторно: он дописывает только недостающие документы и не трогает то, что вы изменили в админке. `npm run seed -- --force` перезаписывает всё заглушками.
+После `make-admin` выйдите и войдите снова: роль попадает в сессию при входе.
 
 ## Как добавлять контент
 

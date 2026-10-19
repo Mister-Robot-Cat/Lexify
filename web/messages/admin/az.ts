@@ -41,6 +41,9 @@ const az: AdminMessages = {
     unlimited: "Limitsiz",
   },
   overview: {
+    seedTitle: "Verilənlər bazası boşdur",
+    seedText: "Sayt hazırda daxili başlanğıc nümunələri göstərir. Kursları, dərsləri və ya tapşırıqları redaktə etməzdən əvvəl onları bazaya yükləyin, əks halda digər nümunələr siyahılardan itəcək.",
+    seedButton: "Başlanğıc kontenti yüklə",
     stats: {
       users: "İstifadəçilər",
       newUsers30d: "Son 30 gündə yeni",
