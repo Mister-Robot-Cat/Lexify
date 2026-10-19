@@ -512,6 +512,7 @@ const ru: Messages = {
   },
   cabinet: {
     metaTitle: "Мой кабинет",
+    dismiss: "Закрыть",
     nav: { overview: "Обзор", diagnostic: "Диагностика", account: "Аккаунт", skills: "Навыки" },
     tabs: { lessons: "Уроки", practice: "Практика", dashboard: "Статистика" },
     hello: "Привет, {name}",

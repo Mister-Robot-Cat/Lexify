@@ -87,4 +87,11 @@ describe("server-only collections", () => {
   it("blocks orders written by the client", async () => {
     await denied(setDoc(doc(fs, "orders/x"), { uid, status: "paid" }));
   });
+  it("keeps admin settings, announcements and the admin log server-only", async () => {
+    await denied(setDoc(doc(fs, "config/ai"), { monthlyLimit: 100000 }));
+    await denied(setDoc(doc(fs, "config/diagnostic"), { paywall: {} }));
+    await denied(setDoc(doc(fs, "broadcasts/x"), { active: true }));
+    await denied(getDoc(doc(fs, "adminLog/x")));
+    await denied(setDoc(doc(fs, `aiUsage/${uid}_202601`), { count: 0 }));
+  });
 });

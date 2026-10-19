@@ -12,7 +12,7 @@ export async function getAiConfig(): Promise<AiConfig> {
   return { monthlyLimit: (snap.data()?.monthlyLimit as number | undefined) ?? DEFAULT_MONTHLY_AI_LIMIT };
 }
 
-function monthKey(d = new Date()) {
+export function monthKey(d = new Date()) {
   return `${d.getUTCFullYear()}${String(d.getUTCMonth() + 1).padStart(2, "0")}`;
 }
 

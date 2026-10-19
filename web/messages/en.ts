@@ -510,6 +510,7 @@ const en = {
   },
   cabinet: {
     metaTitle: "My study",
+    dismiss: "Dismiss",
     nav: { overview: "Overview", diagnostic: "Diagnostic", account: "Account", skills: "Skills" },
     tabs: { lessons: "Lessons", practice: "Practice", dashboard: "Dashboard" },
     hello: "Hello, {name}",
@@ -613,7 +614,7 @@ const en = {
 
 export default en;
 
-type Widen<T> = T extends string
+export type Widen<T> = T extends string
   ? string
   : T extends readonly (infer U)[]
     ? Widen<U>[]

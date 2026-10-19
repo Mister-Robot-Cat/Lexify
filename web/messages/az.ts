@@ -512,6 +512,7 @@ const az: Messages = {
   },
   cabinet: {
     metaTitle: "Mənim kabinetim",
+    dismiss: "Bağla",
     nav: { overview: "Ümumi baxış", diagnostic: "Diaqnostika", account: "Hesab", skills: "Bacarıqlar" },
     tabs: { lessons: "Dərslər", practice: "Təcrübə", dashboard: "Statistika" },
     hello: "Salam, {name}",

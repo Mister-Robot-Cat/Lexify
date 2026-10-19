@@ -54,18 +54,26 @@ async function finalizeIfComplete(uid: string) {
   );
 }
 
+/** False when an admin reset the diagnostic after this attempt started. */
+async function isCurrent(uid: string, attemptId: string, section: Skill) {
+  return (await getState(uid))?.sections[section]?.attemptId === attemptId;
+}
+
 export const diagnosticHooks: AttemptHooks = {
   getTask,
-  async onScoring(uid, _attemptId, a) {
+  async onScoring(uid, attemptId, a) {
+    if (!(await isCurrent(uid, attemptId, a.section))) return;
     await stateRef(uid).update({ [`sections.${a.section}.status`]: "scoring" });
   },
   async onSubmitted(uid, attemptId, a, band) {
+    if (!(await isCurrent(uid, attemptId, a.section))) return;
     await stateRef(uid).update({ [`sections.${a.section}`]: { status: "submitted", attemptId, band } satisfies SectionState });
     await finalizeIfComplete(uid);
   },
-  async onVoided(uid, _attemptId, a, reason) {
+  async onVoided(uid, attemptId, a, reason) {
     // The user gets another try: the section goes back to "not started".
     const prev = (await getState(uid))?.sections[a.section];
+    if (prev?.attemptId !== attemptId) return;
     await stateRef(uid).update({
       [`sections.${a.section}`]: { status: "not_started", voidedCount: (prev?.voidedCount ?? 0) + 1, lastVoidReason: reason },
     });
