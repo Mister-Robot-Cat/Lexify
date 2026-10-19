@@ -9,8 +9,8 @@
     "lint": "eslint",
     "typecheck": "tsc --noEmit",
     "emulators": "firebase emulators:start --project demo-lexify",
-    "seed": "tsx --env-file-if-exists=.env.local scripts/seed.ts",
-    "make-admin": "tsx --env-file-if-exists=.env.local scripts/make-admin.ts",
+    "seed": "tsx --env-file-if-exists=.env.local scripts/seed.mts",
+    "make-admin": "tsx --env-file-if-exists=.env.local scripts/make-admin.mts",
     "test:rules": "vitest run tests",
     "test:e2e": "playwright test"
   },

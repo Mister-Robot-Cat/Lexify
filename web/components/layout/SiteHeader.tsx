@@ -32,7 +32,7 @@ export function SiteHeader() {
 
   return (
     <header
-      className={`sticky top-0 z-40 transition-colors ${scrolled || open ? "border-b border-line bg-paper/90 backdrop-blur" : "bg-transparent"}`}
+      className={`no-print sticky top-0 z-40 transition-colors ${scrolled || open ? "border-b border-line bg-paper/90 backdrop-blur" : "bg-transparent"}`}
     >
       <div className="container-page flex h-16 items-center justify-between gap-4">
         <Link href={home} aria-label="Lexify" onClick={() => setOpen(false)}>

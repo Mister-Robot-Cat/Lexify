@@ -25,7 +25,7 @@ function SocialIcon({ id }: { id: (typeof SOCIAL_LINKS)[number]["id"] }) {
 export function SiteFooter({ locale, m }: { locale: Locale; m: Messages }) {
   const home = `/${locale}`;
   return (
-    <footer className="mt-24 border-t border-line bg-sand/60">
+    <footer className="no-print mt-24 border-t border-line bg-sand/60">
       <div className="container-page grid gap-10 py-14 sm:grid-cols-2 lg:grid-cols-4">
         <div className="space-y-4">
           <Logo />
