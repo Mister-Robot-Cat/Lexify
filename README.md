@@ -181,6 +181,25 @@ Then deploy behind a reverse proxy (e.g., nginx) pointing to port 8000.
 | `BOT_MODE`           | No       | `polling` or `webhook` (default: polling) |
 | `WEBHOOK_URL`        | No       | Required when BOT_MODE=webhook       |
 
+## Code knowledge graph (graphify)
+
+[graphify](https://github.com/safishamsi/graphify) maps the repo into a queryable graph so AI coding assistants (Claude Code, Cursor, Codex) can ask the graph instead of grepping files. The graph lives in `graphify-out/` (`graph.json` and `GRAPH_REPORT.md` are committed); `CLAUDE.md` tells Claude Code to use it.
+
+```bash
+uv tool install graphifyy        # or: pip install graphifyy
+graphify claude install          # PreToolUse hook in .claude/settings.json (local, not committed)
+graphify hook install            # optional: rebuild the graph on every commit/checkout
+```
+
+Useful commands:
+
+```bash
+graphify query "how does checkout work"   # scoped subgraph for a question
+graphify explain "checkout()"             # a node and its neighbours
+graphify update .                         # refresh after code changes (AST only, no API key)
+graphify export html                      # interactive graphify-out/graph.html
+```
+
 ## License
 
 MIT
